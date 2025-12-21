@@ -6,12 +6,12 @@ import pandas as pd
 nba_teams = teams.get_teams()
 
 # Gets ID of team name
-lakers = [team for team in nba_teams if team['full_name'] == 'Los Angeles Lakers'][0]
+lakers = [team for team in nba_teams if team['full_name'] == 'Toronto Raptors'][0]
 team_id = lakers['id']
 #returns all games for a season
 gamelog = TeamGameLog(
     team_id=team_id,
-    season='2023-24',   # change as needed
+    season='2025-26',
     season_type_all_star='Regular Season'
 )
 
@@ -42,6 +42,3 @@ wins = (last_20_games['WL'] == 'W').sum()
 losses = (last_20_games['WL'] == 'L').sum()
 
 print(f"Last 20 games: {wins}-{losses}")
-
-
-
