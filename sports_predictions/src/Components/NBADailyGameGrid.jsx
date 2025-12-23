@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import NBAGameSnippet from "./NBAGameSnippet.jsx";
 
 export default function NBADailyGameGrid() {
@@ -64,15 +63,7 @@ export default function NBADailyGameGrid() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {games.map((game) => {
-            return (
-              <Link
-                to={`/game/${game.gameId}`}
-                state={{ game }}
-                key={game.gameId}
-              >
-                <NBAGameSnippet game={game} />
-              </Link>
-            );
+            return <NBAGameSnippet game={game} key={game.gameId} />;
           })}
         </div>
       </div>

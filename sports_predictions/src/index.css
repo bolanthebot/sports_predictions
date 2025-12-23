@@ -105,3 +105,8 @@ body {
   color: #dc2626;
   text-align: center;
 }
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 700;
+}

@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 function NBAGameSnippet(props) {
   const { game } = props;
   const getGameStatus = (game) => {
@@ -11,8 +13,6 @@ function NBAGameSnippet(props) {
     // Convert "3:30 pm ET" format or use as-is
     return timeString;
   };
-
-  console.log(game);
 
   const status = getGameStatus(game);
   const gameStatus = game.gameStatus;
@@ -46,7 +46,13 @@ function NBAGameSnippet(props) {
       <div className="space-y-3">
         <div className="flex justify-between items-center p-2 rounded bg-slate-700/50">
           <div className="flex flex-col">
-            <span className="text-white font-medium">{awayTeam}</span>
+            <Link
+              to={`/team/${game.awayTeam.teamId}`}
+              state={{ team: game.awayTeam }}
+              className="text-white font-medium hover:underline"
+            >
+              {awayTeam}
+            </Link>
             <span className="text-xs text-gray-400">{awayRecord}</span>
           </div>
           <span className="text-xl font-bold text-white">
@@ -56,12 +62,27 @@ function NBAGameSnippet(props) {
 
         <div className="flex justify-between items-center p-2 rounded bg-slate-700/50">
           <div className="flex flex-col">
-            <span className="text-white font-medium">{homeTeam}</span>
+            <Link
+              to={`/team/${game.homeTeam.teamId}`}
+              state={{ team: game.homeTeam }}
+              className="text-white font-medium hover:underline"
+            >
+              {homeTeam}
+            </Link>
             <span className="text-xs text-gray-400">{homeRecord}</span>
           </div>
           <span className="text-xl font-bold text-white">
             {gameStatus === 1 ? "—" : homeScore}
           </span>
+        </div>
+        <div className="flex justify-end mt-3">
+          <Link
+            to={`/game/${game.gameId}`}
+            state={{ game: game }}
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm"
+          >
+            View Details
+          </Link>
         </div>
       </div>
     </div>
