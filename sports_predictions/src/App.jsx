@@ -1,5 +1,5 @@
-import DailyNBAGames from "./DailyNBAGames";
+import NBADailyGameGrid from "./Components/NBADailyGameGrid.jsx";
 
 export default function App() {
-  return <DailyNBAGames />;
+  return <NBADailyGameGrid />;
 }
