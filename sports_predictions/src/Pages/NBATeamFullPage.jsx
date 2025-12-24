@@ -1,5 +1,6 @@
 import { useLocation, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import Header from "../Components/Header.jsx";
 import ObjectTable from "../Components/ObjectTable";
 
 export default function NBATeamFullPage() {
@@ -42,7 +43,7 @@ export default function NBATeamFullPage() {
 
   return (
     // ADD CSS
-    <div className="stuff">
+    <div className="min-h-screen flex flex-col px-4 text-white">
       <h1 className="page-title">
         Team Page for {team.teamCity} {team.teamName}
       </h1>

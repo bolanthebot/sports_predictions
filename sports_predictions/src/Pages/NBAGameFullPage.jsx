@@ -1,5 +1,6 @@
 import { useLocation, useParams } from "react-router-dom";
 import ObjectTable from "../Components/ObjectTable";
+import Header from "../Components/Header.jsx";
 
 export default function NBAGameFullPage() {
   const { state } = useLocation();
@@ -9,7 +10,7 @@ export default function NBAGameFullPage() {
   if (!game) return <div>Loading game {params.gameId}...</div>;
   console.log(game);
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900 px-4">
+    <div className="bg-slate-900 min-h-screen flex flex-col px-4">
       <div className="max-w-md bg-slate-800 p-4">
         <p className="mb-2 text-sm font-semibold text-gray-300">
           {game.gameStatusText}
