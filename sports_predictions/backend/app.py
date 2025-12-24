@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.nba import get_today_games
 from services.nba import get_team
+from services.nba import get_player
 
 app = FastAPI()
 
@@ -17,8 +18,13 @@ app.add_middleware(
 def today_games():
     return get_today_games()
 
-#gets team data by id eg http://localhost:8000/api/nba/teams/?id=1610612739
+#gets team past games data by id eg http://localhost:8000/api/nba/teams/?id=1610612739
 #return json
 @app.get("/api/nba/teams/")
-def team_data(id):
+def team_last_20(id):
     return get_team(id)
+
+#gets player past games data by id eg http://localhost:8000/api/nba/players/?id=201935
+@app.get("/api/nba/players/")
+def player_last_20(id):
+    return get_player(id)
