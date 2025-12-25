@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from services.nba import get_today_games,get_team,get_player
+from services.nba import get_today_games,get_team,get_player,get_all_games
 import json
+from predict import predict_today_games
 app = FastAPI()
 
 # Allow frontend access
@@ -26,3 +27,12 @@ def team_games(id):
 @app.get("/api/nba/players/")
 def player_games(id):
     return get_player(id).to_json(orient='records')
+
+"""@app.get("/api/nba/allgames/")
+def baba():
+    return get_all_games().to_json(orient='records')"""
+
+#http://localhost:8000/api/nba/predictions/today
+@app.get("/api/nba/predictions/today")
+def predictions():
+    return predict_today_games().to_json(orient='records')

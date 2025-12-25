@@ -2,85 +2,190 @@ import xgboost as xgb
 import pandas as pd
 import pickle
 import os
-from sklearn.model_selection import train_test_split
+
+from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 from services.nba import get_all_games
 
-# Create models directory if it doesn't exist
-os.makedirs('models', exist_ok=True)
+# -------------------------------------------------
+# Setup
+# -------------------------------------------------
+os.makedirs("models", exist_ok=True)
 
 # Load data
-df = get_all_games()
+df = (get_all_games())
+df["GAME_DATE"] = pd.to_datetime(df["GAME_DATE"])
 
-# Sort by team and date
-df = df.sort_values(['TEAM_ID', 'GAME_DATE'], ascending=[True, True])
+# Sort for rolling features
+df = df.sort_values(["TEAM_ID", "GAME_DATE"])
 
+# -------------------------------------------------
+# Feature Engineering
+# -------------------------------------------------
 def create_features(df):
-    """
-    Create features using rolling averages for better prediction
-    """
-    features = pd.DataFrame()
-    
-    # Calculate rolling averages (last 5 games) for each team
-    for col in ['PTS', 'FG_PCT', 'FG3_PCT', 'FT_PCT', 'REB', 'AST', 'STL', 'BLK', 'TOV']:
-        features[col.lower()] = df.groupby('TEAM_ID')[col].transform(
-            lambda x: x.shift(1).rolling(5, min_periods=1).mean()
+    features = pd.DataFrame(index=df.index)
+
+    stats = ["PTS", "FG_PCT", "FG3_PCT", "FT_PCT", "REB", "AST", "STL", "BLK", "TOV"]
+
+    # ----------------------------------
+    # Team rolling averages (last 5 games)
+    # ----------------------------------
+    for stat in stats:
+        features[f"{stat.lower()}_avg_5"] = (
+            df.groupby("TEAM_ID")[stat]
+              .transform(lambda x: x.shift(1).rolling(5, min_periods=3).mean())
         )
-    
-    # pts_avg_5 same as pts (both 5-game rolling average)
-    features['pts_avg_5'] = features['pts']
-    
-    # Home/away
-    features['is_home'] = (df['MATCHUP'].str.contains('vs.')).astype(int)
-    
+
+    # ----------------------------------
+    # Win % last 5 games
+    # ----------------------------------
+    features["win_pct_5"] = (
+        df.groupby("TEAM_ID")["WL"]
+          .transform(
+              lambda x: x.map({"W": 1, "L": 0})
+                        .shift(1)
+                        .rolling(5, min_periods=3)
+                        .mean()
+          )
+    )
+
+    # ----------------------------------
+    # Rest days
+    # ----------------------------------
+    features["rest_days"] = (
+        df["GAME_DATE"] -
+        df.groupby("TEAM_ID")["GAME_DATE"].shift(1)
+    ).dt.days.clip(0, 7).fillna(3)
+
+    # ----------------------------------
+    # Home / Away
+    # ----------------------------------
+    features["is_home"] = df["MATCHUP"].str.contains("vs.").astype(int)
+
+    # =====================================================
+    # OPPONENT FEATURES (ROW-SWAP METHOD)
+    # =====================================================
+
+    # For each GAME_ID, swap the two rows
+    opponent_features = (
+        features
+        .groupby(df["GAME_ID"])
+        .apply(lambda x: x.iloc[::-1])
+        .reset_index(drop=True)
+    )
+
+    # ----------------------------------
+    # Difference features
+    # ----------------------------------
+    for stat in stats:
+        features[f"{stat.lower()}_diff"] = (
+            features[f"{stat.lower()}_avg_5"] -
+            opponent_features[f"{stat.lower()}_avg_5"]
+        )
+
+    features["win_pct_diff"] = (
+        features["win_pct_5"] -
+        opponent_features["win_pct_5"]
+    )
+
+    # ----------------------------------
+    # Home interaction
+    # ----------------------------------
+    features["home_strength"] = features["is_home"] * features["pts_avg_5"]
+
     return features
 
-# Create features
+# -------------------------------------------------
+# Build dataset
+# -------------------------------------------------
 X = create_features(df)
+y = df["WL"].map({"W": 1, "L": 0})
 
-# Create target (what you're predicting)
-y = df['WL'].map({'W': 1, 'L': 0})
+# Drop rows with missing rolling data
+valid = ~X.isna().any(axis=1)
+X = X[valid]
+y = y[valid]
+df_valid = df.loc[valid]
 
-# Remove rows with NaN (first few games per team won't have rolling averages)
-valid_idx = ~X.isna().any(axis=1)
-X = X[valid_idx]
-y = y[valid_idx]
+print(f"Training samples: {len(X)}")
 
-print(f"Training samples after removing NaN: {len(X)}")
+# -------------------------------------------------
+# Time-based Train/Test Split (NO LEAKAGE)
+# -------------------------------------------------
+split_date = df_valid["GAME_DATE"].quantile(0.80)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
-)
+train_idx = df_valid["GAME_DATE"] < split_date
+test_idx  = df_valid["GAME_DATE"] >= split_date
 
-# Train model
+X_train, X_test = X[train_idx], X[test_idx]
+y_train, y_test = y[train_idx], y[test_idx]
+
+# -------------------------------------------------
+# Train Model
+# -------------------------------------------------
 model = xgb.XGBClassifier(
-    n_estimators=200,
-    learning_rate=0.05,
-    max_depth=6,
+    n_estimators=500,
+    learning_rate=0.03,
+    max_depth=5,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="binary:logistic",
+    eval_metric="logloss",
     random_state=42
 )
 
-model.fit(X_train, y_train)
+model.fit(
+    X_train, y_train,
+    eval_set=[(X_test, y_test)],
+    verbose=False
+)
 
-# Evaluate
-accuracy = model.score(X_test, y_test)
-print(f"\nWin Prediction Accuracy: {accuracy:.3f}")
 
-# Feature importance
-importance = pd.DataFrame({
-    'feature': X.columns,
-    'importance': model.feature_importances_
-}).sort_values('importance', ascending=False)
+# -------------------------------------------------
+# Evaluation
+# -------------------------------------------------
+y_pred = model.predict(X_test)
+y_proba = model.predict_proba(X_test)[:, 1]
+
+print("\n--- Model Performance ---")
+print("Accuracy :", accuracy_score(y_test, y_pred))
+print("Log Loss :", log_loss(y_test, y_proba))
+print("ROC AUC  :", roc_auc_score(y_test, y_proba))
+
+# -------------------------------------------------
+# Feature Importance
+# -------------------------------------------------
+importance = (
+    pd.DataFrame({
+        "feature": X.columns,
+        "importance": model.feature_importances_
+    })
+    .sort_values("importance", ascending=False)
+)
+
 print("\nTop Features:")
-print(importance)
+print(importance.head(10))
 
-# Save model with pickle
-with open('models/win_model.pkl', 'wb') as f:
+# -------------------------------------------------
+# Save Model + Metadata
+# -------------------------------------------------
+with open("models/win_model.pkl", "wb") as f:
     pickle.dump(model, f)
-print("\nModel saved to models/win_model.pkl!")
 
-# Save feature names
-feature_names = X.columns.tolist()
-with open('models/feature_names.pkl', 'wb') as f:
-    pickle.dump(feature_names, f)
-print("Feature names saved!")
+with open("models/feature_names.pkl", "wb") as f:
+    pickle.dump(X.columns.tolist(), f)
+
+metadata = {
+    "train_samples": len(X_train),
+    "test_samples": len(X_test),
+    "split_date": str(split_date),
+    "metrics": {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "log_loss": log_loss(y_test, y_proba),
+        "roc_auc": roc_auc_score(y_test, y_proba)
+    }
+}
+
+with open("models/metadata.pkl", "wb") as f:
+    pickle.dump(metadata, f)
+
+print("\n✅ Model and metadata saved to /models")

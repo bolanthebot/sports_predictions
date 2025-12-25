@@ -1,99 +1,139 @@
 import pickle
 import pandas as pd
-from services.nba import get_team
+from services.nba import get_all_games, get_today_games
 
-# Load the trained model
-with open('models/win_model.pkl', 'rb') as f:
+MODEL_PATH = "models/win_model.pkl"
+FEATURES_PATH = "models/feature_names.pkl"
+
+# Load trained model
+with open(MODEL_PATH, "rb") as f:
     model = pickle.load(f)
 
-# Load feature names
-with open('models/feature_names.pkl', 'rb') as f:
-    feature_names = pickle.load(f)
+# Load feature list
+with open(FEATURES_PATH, "rb") as f:
+    FEATURE_NAMES = pickle.load(f)
 
-print("Model loaded successfully!")
 
-def create_prediction_features(team_df):
-    """
-    Create features for prediction - matches training
-    """
-    team_df = team_df.sort_values('GAME_DATE', ascending=True)
-    
-    features = pd.DataFrame()
-    
-    # Use rolling averages (last 5 games)
-    for col in ['PTS', 'FG_PCT', 'FG3_PCT', 'FT_PCT', 'REB', 'AST', 'STL', 'BLK', 'TOV']:
-        features[col.lower()] = team_df[col].rolling(5, min_periods=1).mean()
-    
-    features['pts_avg_5'] = features['pts']
-    features['is_home'] = 0
-    
+# ----------------------------
+# Feature engineering (same as training)
+# ----------------------------
+def create_features(df):
+    features = pd.DataFrame(index=df.index)
+    stats = ["PTS", "FG_PCT", "FG3_PCT", "FT_PCT", "REB", "AST", "STL", "BLK", "TOV"]
+
+    for stat in stats:
+        features[f"{stat.lower()}_avg_5"] = (
+            df.groupby("TEAM_ID")[stat]
+              .transform(lambda x: x.shift(1).rolling(5, min_periods=3).mean())
+        )
+
+    features["win_pct_5"] = (
+        df.groupby("TEAM_ID")["WL"]
+          .transform(lambda x: x.map({"W": 1, "L": 0})
+                     .shift(1)
+                     .rolling(5, min_periods=3)
+                     .mean())
+    )
+
+    features["rest_days"] = (
+        df["GAME_DATE"] - df.groupby("TEAM_ID")["GAME_DATE"].shift(1)
+    ).dt.days.clip(0, 7).fillna(3)
+
+    features["is_home"] = df["MATCHUP"].str.contains("vs.").astype(int)
+
+    # Opponent features (row swap)
+    opponent = features.groupby(df["GAME_ID"]).apply(lambda x: x.iloc[::-1]).reset_index(drop=True)
+
+    for stat in stats:
+        features[f"{stat.lower()}_diff"] = features[f"{stat.lower()}_avg_5"] - opponent[f"{stat.lower()}_avg_5"]
+
+    features["win_pct_diff"] = features["win_pct_5"] - opponent["win_pct_5"]
+    features["home_strength"] = features["is_home"] * features["pts_avg_5"]
+
     return features
-def predict_team_win(team_id, is_home=True):
-    """
-    Predict win probability for a team's next game
-    """
-    # Get team's recent games
-    team_df = get_team(team_id)
-    
-    # Sort by date
-    team_df = team_df.sort_values('GAME_DATE', ascending=True)
-    
-    # Create features based on recent performance
-    X = create_prediction_features(team_df)
-    
-    # Get the most recent features (represents current team form)
-    latest_features = X.iloc[-1:].copy()
-    
-    # Set home/away for next game
-    latest_features['is_home'] = int(is_home)
-    
-    # Ensure features are in correct order
-    latest_features = latest_features[feature_names]
-    
-    print(f"\nTeam {team_id} prediction features:")
-    print(latest_features.iloc[0])
-    
-    # Predict
-    win_prob = model.predict_proba(latest_features)[0][1]
-    
-    print(f"Raw probabilities [loss, win]: {model.predict_proba(latest_features)[0]}")
-    print(f"Win probability: {win_prob * 100:.2f}%")
-    
-    return win_prob * 100
 
-def predict_matchup(home_team_id, away_team_id):
-    """
-    Predict win probabilities for both teams in a matchup
-    
-    Args:
-        home_team_id: Home team NBA ID
-        away_team_id: Away team NBA ID
-    
-    Returns:
-        Dictionary with both teams' win probabilities
-    """
-    home_win_prob = predict_team_win(home_team_id, is_home=True)
-    away_win_prob = predict_team_win(away_team_id, is_home=False)
-    
-    return {
-        'home_team': {
-            'team_id': home_team_id,
-            'win_probability': round(home_win_prob, 2)
-        },
-        'away_team': {
-            'team_id': away_team_id,
-            'win_probability': round(away_win_prob, 2)
-        }
-    }
 
-# Example usage
-if __name__ == "__main__":    
-    # Single team prediction
-    lakers_id = 1610612747
-    # Matchup prediction
-    warriors_id = 1610612744
+# ----------------------------
+# Flatten today’s JSON to DataFrame
+# ----------------------------
+def get_today_games_flat(today_json):
+    game_date = today_json["scoreboard"]["gameDate"]
+    games = today_json["scoreboard"]["games"]
 
-    matchup = predict_matchup(1610612744,1610612742)
-    print(f"\nMatchup Prediction:")
-    print(f"Home (Warriors): {matchup['home_team']['win_probability']}%")
-    print(f"Away (Mavs): {matchup['away_team']['win_probability']}%")
+    rows = []
+    for g in games:
+        rows.append({
+            "GAME_ID": g["gameId"],
+            "GAME_DATE": pd.to_datetime(game_date),
+            "TEAM_ID": g["homeTeam"]["teamId"],
+            "TEAM_NAME": g["homeTeam"]["teamName"],
+            "MATCHUP": f"{g['homeTeam']['teamTricode']} vs. {g['awayTeam']['teamTricode']}",
+        })
+        rows.append({
+            "GAME_ID": g["gameId"],
+            "GAME_DATE": pd.to_datetime(game_date),
+            "TEAM_ID": g["awayTeam"]["teamId"],
+            "TEAM_NAME": g["awayTeam"]["teamName"],
+            "MATCHUP": f"{g['awayTeam']['teamTricode']} @ {g['homeTeam']['teamTricode']}",
+        })
+    return pd.DataFrame(rows)
+
+
+# ----------------------------
+# Predict win probability (normalized)
+# ----------------------------
+def predict_today_games():
+    # Historical games
+    history = pd.DataFrame(get_all_games())
+    history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
+    history = history.sort_values(["TEAM_ID", "GAME_DATE"])
+
+    # Features from history
+    features = create_features(history)
+    valid = ~features.isna().any(axis=1)
+    history = history[valid]
+    features = features[valid]
+
+    # Today’s games
+    today_json = get_today_games()
+    today_df = get_today_games_flat(today_json)
+
+    predictions = []
+
+    # Group by game to normalize
+    for game_id, group in today_df.groupby("GAME_ID"):
+        game_preds = []
+        for _, game in group.iterrows():
+            team_id = game["TEAM_ID"]
+            team_hist = history[history["TEAM_ID"] == team_id].tail(1)
+            if team_hist.empty:
+                # Skip if team has <3 past games
+                continue
+
+            team_feat = features.loc[team_hist.index][FEATURE_NAMES]
+            prob = model.predict_proba(team_feat)[0, 1]
+            game_preds.append({
+                "team": game["TEAM_NAME"],
+                "team_id": int(team_id),
+                "is_home": "vs." in game["MATCHUP"],
+                "raw_prob": prob
+            })
+
+        # Normalize so probabilities sum to 1
+        if len(game_preds) == 2:
+            total = game_preds[0]["raw_prob"] + game_preds[1]["raw_prob"]
+            game_preds[0]["win_probability"] = round(game_preds[0]["raw_prob"] / total, 3)
+            game_preds[1]["win_probability"] = round(game_preds[1]["raw_prob"] / total, 3)
+            for p in game_preds:
+                predictions.append({
+                    "game_id": game_id,
+                    "team": p["team"],
+                    "team_id": p["team_id"],
+                    "is_home": p["is_home"],
+                    "win_probability": p["win_probability"]
+                })
+
+    return predictions
+
+
+
