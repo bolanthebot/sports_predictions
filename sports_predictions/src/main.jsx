@@ -9,9 +9,9 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <div className="bg-slate-900 min-h-screen">
-    <Header />
     <React.StrictMode>
       <BrowserRouter>
+        <Header />
         <Routes>
           <Route path="/" element={<App />} />
           <Route path="/game/:gameId" element={<NBAGameFullPage />} />
