@@ -30,7 +30,7 @@ function NBAGameSnippet(props) {
     >
       <Link to={`/game/${game.gameId}`} state={{ game: game }}>
         <div className="flex justify-between items-center mb-4 text-sm">
-          <span className="text-gray-400">{formatTime(status)}</span>
+          <span className="text-gray-400">{game.gameStatusText}</span>
           <span
             className={`px-3 py-1 rounded-full font-semibold ${
               status === "Live"
