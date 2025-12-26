@@ -5,12 +5,14 @@ import NBATeamFullPage from "./Pages/NBATeamFullPage";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import Header from "./Components/Header.jsx";
+import ScrollToTop from "./Components/ScrollToTop.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <div className="bg-slate-900 min-h-screen">
     <React.StrictMode>
       <BrowserRouter>
+        <ScrollToTop />
         <Header />
         <Routes>
           <Route path="/" element={<App />} />
