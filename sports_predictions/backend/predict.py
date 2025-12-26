@@ -136,4 +136,10 @@ def predict_today_games():
     return predictions
 
 
-
+# ----------------------------
+# Example usage
+# ----------------------------
+if __name__ == "__main__":
+    preds = predict_today_games()
+    for p in preds:
+        print(p)

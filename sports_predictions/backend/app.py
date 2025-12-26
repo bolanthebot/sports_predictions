@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.nba import get_today_games,get_team,get_player,get_all_games
 import json
 from predict import predict_today_games
+import pandas as pd
 app = FastAPI()
 
 # Allow frontend access
@@ -35,4 +36,5 @@ def baba():
 #http://localhost:8000/api/nba/predictions/today
 @app.get("/api/nba/predictions/today")
 def predictions():
-    return predict_today_games().to_json(orient='records')
+    df = pd.DataFrame(predict_today_games())
+    return df.to_dict(orient="records")
