@@ -33,8 +33,12 @@ def player_games(id):
 def baba():
     return get_all_games().to_json(orient='records')"""
 
-#http://localhost:8000/api/nba/predictions/today
-@app.get("/api/nba/predictions/today")
-def predictions():
+#http://localhost:8000/api/nba/predictions/today/?gameid=0022500423&teamid=1610612737
+@app.get("/api/nba/predictions/today/")
+def predictions(gameid:str,teamid:str):
     df = pd.DataFrame(predict_today_games())
-    return df.to_dict(orient="records")
+    df=df.to_dict(orient="records")
+    for i in range(0,len(df)):
+        if (str(df[i].get("game_id")) == gameid) and (str(df[i].get("team_id"))==teamid):
+            return df[i].get("win_probability")
+    return
