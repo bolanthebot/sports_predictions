@@ -40,5 +40,3 @@ def get_all_games():
 
     df = gamelog.get_data_frames()[0]
     return df
-
-#print(get_today_games())
