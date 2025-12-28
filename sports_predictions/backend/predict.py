@@ -82,7 +82,7 @@ def get_today_games_flat(today_json):
 # ----------------------------
 # Predict win probability (normalized)
 # ----------------------------
-def predict_today_games():
+def predict_today_games(gameid: str, teamid: str):
     # Historical games
     history = pd.DataFrame(get_all_games())
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
@@ -98,40 +98,45 @@ def predict_today_games():
     today_json = get_today_games()
     today_df = get_today_games_flat(today_json)
 
-    predictions = []
+    # ONLY look at the requested game
+    today_df = today_df[today_df["GAME_ID"] == str(gameid)]
 
-    # Group by game to normalize
-    for game_id, group in today_df.groupby("GAME_ID"):
-        game_preds = []
-        for _, game in group.iterrows():
-            team_id = game["TEAM_ID"]
-            team_hist = history[history["TEAM_ID"] == team_id].tail(1)
-            if team_hist.empty:
-                # Skip if team has <3 past games
-                continue
+    game_preds = []
 
-            team_feat = features.loc[team_hist.index][FEATURE_NAMES]
-            prob = model.predict_proba(team_feat)[0, 1]
-            game_preds.append({
-                "team": game["TEAM_NAME"],
-                "team_id": int(team_id),
-                "is_home": "vs." in game["MATCHUP"],
-                "raw_prob": prob
-            })
+    for _, game in today_df.iterrows():
+        t_id = int(game["TEAM_ID"])
+        team_hist = history[history["TEAM_ID"] == t_id].tail(1)
+        if team_hist.empty:
+            continue
 
-        # Normalize so probabilities sum to 1
-        if len(game_preds) == 2:
-            total = game_preds[0]["raw_prob"] + game_preds[1]["raw_prob"]
-            game_preds[0]["win_probability"] = round(game_preds[0]["raw_prob"] / total, 3)
-            game_preds[1]["win_probability"] = round(game_preds[1]["raw_prob"] / total, 3)
-            for p in game_preds:
-                predictions.append({
-                    "game_id": game_id,
-                    "team": p["team"],
-                    "team_id": p["team_id"],
-                    "is_home": p["is_home"],
-                    "win_probability": p["win_probability"]
-                })
+        team_feat = features.loc[team_hist.index][FEATURE_NAMES]
+        prob = model.predict_proba(team_feat)[0, 1]
 
-    return predictions
+        game_preds.append({
+            "team": game["TEAM_NAME"],
+            "team_id": t_id,
+            "is_home": "vs." in game["MATCHUP"],
+            "raw_prob": prob
+        })
 
+    # Must have both teams to normalize
+    if len(game_preds) != 2:
+        return None
+
+    # Normalize
+    total = game_preds[0]["raw_prob"] + game_preds[1]["raw_prob"]
+    for p in game_preds:
+        p["win_probability"] = round(p["raw_prob"] / total, 3)
+
+    #Return ONLY the requested team
+    for p in game_preds:
+        if int(p["team_id"]) == int(teamid):
+            return {
+                "game_id": gameid,
+                "team": p["team"],
+                "team_id": p["team_id"],
+                "is_home": p["is_home"],
+                "win_probability": p["win_probability"]
+            }
+
+    return None
