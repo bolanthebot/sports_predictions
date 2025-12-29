@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.nba import get_today_games,get_team,get_player,get_all_games
 import json
-from predict import predict_today_games
+from predict import predict_game
+from predict_player import predict_player_points
 import pandas as pd
 app = FastAPI()
 
@@ -29,13 +30,17 @@ def team_games(id):
 def player_games(id):
     return get_player(id).to_json(orient='records')
 
-"""@app.get("/api/nba/allgames/")
-def baba():
-    return get_all_games().to_json(orient='records')"""
-
 #http://localhost:8000/api/nba/predictions/today/?gameid=0022500423&teamid=1610612737
 @app.get("/api/nba/predictions/today/")
 def predictions(gameid: str, teamid: str):
-    result = predict_today_games(gameid, teamid)
+    result = predict_game(gameid, teamid)
     return float(result["win_probability"])
+
+#Returns jokic prediction for today
+#http://localhost:8000/api/nba/predictions/player/today/?playerid=1629029
+@app.get("/api/nba/predictions/player/today/")
+def predictions(playerid: str):
+    result = predict_player_points(playerid)
+    print(result)
+    return float(result["predicted_points"])
 

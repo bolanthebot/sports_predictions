@@ -1,2 +1,3 @@
-from nba_api.stats.static import teams
-print(teams.find_teams_by_full_name('mavericks'))
+from nba_api.stats.static import players
+
+print(players.find_players_by_full_name("luka doncic"))
