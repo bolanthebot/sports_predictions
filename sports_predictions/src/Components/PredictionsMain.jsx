@@ -25,14 +25,14 @@ export default function PredictionsMain(props) {
         gameid +
         "&teamid=" +
         teamid;
-      
+
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch games");
 
       const data = await res.json();
-      const wp=data.win_probability
+      console.log("Prediction data:", data);
 
-      setPrediction(wp);
+      setPrediction(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,9 +44,18 @@ export default function PredictionsMain(props) {
     fetchPrediction();
   }, [gameid, teamid]);
 
-  let percent = prediction * 100;
+  const wp = prediction?.win_probability || 0;
+  const pp = prediction?.predicted_team_points || 0;
+
+  let percent = wp * 100;
   percent = percent.toFixed(2) + "%";
+  let predicted_points = Math.round(pp * 10) / 10;
 
   if (loading) return <p className="text-gray-700">Loading prediction...</p>;
-  return <p className="text-gray-400">Prediction: {percent}</p>;
+  return (
+    <div>
+      <p className="text-gray-400">Win Chance: {percent}</p>
+      <p className="text-gray-400">Predicted Points: {predicted_points}</p>
+    </div>
+  );
 }
