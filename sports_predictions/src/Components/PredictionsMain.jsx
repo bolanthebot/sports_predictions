@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import ObjectTable from "./ObjectTable.jsx";
 
 export default function PredictionsMain(props) {
   const ids = props.ids || { gameId: props.game, teamId: props.team };

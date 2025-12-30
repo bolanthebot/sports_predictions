@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import ObjectTable from "../Components/ObjectTable";
 import PredictionsMain from "../Components/PredictionsMain.jsx";
+import PredictionSlider from "../Components/PredictionSlider.jsx";
 
 export default function NBAGameFullPage() {
   const { state } = useLocation();
@@ -43,7 +44,7 @@ export default function NBAGameFullPage() {
   console.log(game);
   return (
     <div className="bg-slate-900 min-h-screen flex flex-col px-4">
-      <div className="max-w-md bg-slate-800 p-4">
+      <div className="max-w-md bg-slate-800 p-4 items-center">
         <p className="mb-2 text-sm font-semibold text-gray-300">
           {game.gameStatusText}
         </p>
@@ -70,6 +71,16 @@ export default function NBAGameFullPage() {
             <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} />
           </div>
         </div>
+        <div className="flex flex-col items-center mt-4">
+          <PredictionSlider
+            away={0.64}
+            home={0.35}
+            linelength={400}
+            lineheight={8}
+            dotSize={20}
+          />
+        </div>
+
         {game.gameClock && (
           <p className="mt-2 text-center text-gray-300 font-medium">
             {game.gameClock} - Q{game.period}
