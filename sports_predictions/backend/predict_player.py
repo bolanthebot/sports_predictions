@@ -105,7 +105,7 @@ def create_player_features(df: pd.DataFrame) -> pd.DataFrame:
 
         features["opp_def_rating"] = df["opp_def_rating"]
 
-    # 🔑 FINAL STEP: fill NaNs (XGBoost-safe)
+    # FINAL STEP: fill NaNs (XGBoost-safe)
     features = features.fillna(0)
 
     return features

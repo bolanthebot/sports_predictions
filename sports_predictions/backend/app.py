@@ -34,13 +34,12 @@ def player_games(id):
 @app.get("/api/nba/predictions/today/")
 def predictions(gameid: str, teamid: str):
     result = predict_game(gameid, teamid)
-    return float(result["win_probability"])
+    return result
 
-#Returns jokic prediction for today
+#Returns number of points exspected to be scored by a player
 #http://localhost:8000/api/nba/predictions/player/today/?playerid=1629029
 @app.get("/api/nba/predictions/player/today/")
 def predictions(playerid: str):
     result = predict_player_points(playerid)
     print(result)
     return float(result["predicted_points"])
-

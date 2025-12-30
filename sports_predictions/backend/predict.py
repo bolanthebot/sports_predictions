@@ -181,9 +181,9 @@ def predict_game(gameid: str, teamid: str):
                 "team": p["team"],
                 "team_id": p["team_id"],
                 "is_home": p["is_home"],
-                "win_probability": p["win_probability"],
-                "predicted_team_points": p["predicted_points"],
-                "predicted_total_points": total_points
+                "win_probability": float(p["win_probability"]),
+                "predicted_team_points": float(p["predicted_points"]),
+                "predicted_total_points": float(total_points)
             }
 
     return None
