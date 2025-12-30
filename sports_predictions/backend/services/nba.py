@@ -1,9 +1,10 @@
 from nba_api.live.nba.endpoints import scoreboard 
 from nba_api.stats.endpoints import CommonAllPlayers,LeagueGameLog,PlayerGameLog,TeamGameLog
 from nba_api.stats.static import players
+from nba_api.stats.static import teams
 import pandas as pd
 import time
-
+from nba_api.stats.endpoints import CommonTeamRoster
 def get_team_abbr_to_id_mapping():
     """Returns mapping of team abbreviations to team IDs"""
     return {
@@ -142,4 +143,12 @@ def get_all_games():
     )
 
     df = gamelog.get_data_frames()[0]
+    return df
+
+def get_team_players(teamid):
+    """returns: top normal roster players ids on a given team"""
+    teamroster=CommonTeamRoster(        
+        team_id=teamid,
+        season='2025-26')
+    df=teamroster.get_data_frames()[0]
     return df

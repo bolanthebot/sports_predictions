@@ -26,12 +26,14 @@ export default function PredictionsMain(props) {
         gameid +
         "&teamid=" +
         teamid;
-
+      
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch games");
 
       const data = await res.json();
-      setPrediction(data);
+      const wp=data.win_probability
+
+      setPrediction(wp);
     } catch (err) {
       setError(err.message);
     } finally {
