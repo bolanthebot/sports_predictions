@@ -71,7 +71,7 @@ export default function NBAGameFullPage() {
             <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} />
           </div>
         </div>
-        <div className="flex flex-col items-center mt-4">
+        {/* <div className="flex flex-col items-center mt-4">
           <PredictionSlider
             away={0.64}
             home={0.35}
@@ -80,7 +80,7 @@ export default function NBAGameFullPage() {
             dotSize={20}
           />
         </div>
-
+ */}
         {game.gameClock && (
           <p className="mt-2 text-center text-gray-300 font-medium">
             {game.gameClock} - Q{game.period}
