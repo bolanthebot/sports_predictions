@@ -32,7 +32,7 @@ export default function NBADailyGameGrid() {
 
   return (
     <div className="min-h-screen p-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl text-center font-bold text-white ">
             NBA Games Today

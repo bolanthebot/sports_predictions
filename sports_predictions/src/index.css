@@ -1,4 +1,6 @@
-/* Reset & base */
+@import "tailwindcss";
+
+/* Reset & base
 * {
   margin: 0;
   padding: 0;
@@ -12,7 +14,7 @@ body {
   color: #111827;
 }
 
-/* Layout */
+/* Layout
 .app-container {
   min-height: 100vh;
   padding: 24px;
@@ -23,7 +25,7 @@ body {
   margin: 0 auto;
 }
 
-/* Header */
+/* Header
 .header {
   display: flex;
   align-items: center;
@@ -36,7 +38,7 @@ body {
   font-weight: 700;
 }
 
-/* Buttons */
+/* Buttons
 .button {
   padding: 8px 16px;
   border-radius: 8px;
@@ -51,14 +53,14 @@ body {
   background-color: #1f2937;
 }
 
-/* Grid */
+/* Grid
 .games-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
 
-/* Card */
+/* Card
 .game-card {
   background: white;
   padding: 16px;
@@ -81,7 +83,7 @@ body {
   font-weight: 500;
 }
 
-/* Status */
+/* Status
 .status-live {
   color: #dc2626;
   font-weight: 600;
@@ -95,7 +97,7 @@ body {
   color: #6b7280;
 }
 
-/* Utility */
+/* Utility
 .center {
   text-align: center;
   margin-top: 40px;
@@ -109,4 +111,4 @@ body {
 .page-title {
   font-size: 2rem;
   font-weight: 700;
-}
+} */

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import PredictionsMain from "./PredictionsMain";
 
 function NBAGameSnippet(props) {
   const { game } = props;
@@ -26,7 +27,7 @@ function NBAGameSnippet(props) {
   return (
     <div
       key={game.gameId}
-      className="bg-slate-800/50 backdrop-blur-sm rounded-xl p-4 border border-slate-700 hover:border-purple-500 transition-colors"
+      className="bg-slate-800/50 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-700 hover:border-purple-500 transition-colors"
     >
       <Link to={`/game/${game.gameId}`} state={{ game: game }}>
         <div className="flex justify-between items-center mb-4 text-sm">
@@ -63,6 +64,7 @@ function NBAGameSnippet(props) {
               <span className="text-xl font-bold text-white">
                 {gameStatus === 1 ? "—" : awayScore}
               </span>
+              {/* <PredictionsMain game={game.gameId} team={game.awayTeam.teamId} /> */}
             </div>
           </Link>
 
@@ -78,6 +80,7 @@ function NBAGameSnippet(props) {
               <span className="text-xl font-bold text-white">
                 {gameStatus === 1 ? "—" : homeScore}
               </span>
+              {/* <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} /> */}
             </div>
           </Link>
         </div>
