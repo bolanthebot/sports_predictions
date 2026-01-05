@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from services.nba import get_today_games,get_team,get_player,get_all_games
+from services.nba import get_today_games,get_team,get_player,get_all_games,get_team_players
 import json
 from predict import predict_game
 from predict_player import predict_player_points
@@ -24,6 +24,13 @@ def today_games():
 @app.get("/api/nba/teams/")
 def team_games(id):
     return get_team(id).to_json(orient='records')
+
+#Gets teams active players ID's http://localhost:8000/api/nba/teamplayers/?teamid=1610612761
+@app.get("/api/nba/teamplayers/")
+def get_active_players(teamid):
+    p= get_team_players(teamid).to_json(orient='records')
+    p=p.get("PLAYER_ID")
+    return p
 
 #gets player past games data by id eg http://localhost:8000/api/nba/players/?id=201935
 @app.get("/api/nba/players/")
