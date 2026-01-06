@@ -25,12 +25,12 @@ def today_games():
 def team_games(id):
     return get_team(id).to_json(orient='records')
 
-#Gets teams active players ID's http://localhost:8000/api/nba/teamplayers/?teamid=1610612761
+#Gets teams active players ID's in list form http://localhost:8000/api/nba/teamplayers/?teamid=1610612761
 @app.get("/api/nba/teamplayers/")
 def get_active_players(teamid):
-    p= get_team_players(teamid).to_json(orient='records')
-    p=p.get("PLAYER_ID")
-    return p
+    players = get_team_players(teamid)
+    pid = players["PLAYER_ID"].tolist()
+    return pid
 
 #gets player past games data by id eg http://localhost:8000/api/nba/players/?id=201935
 @app.get("/api/nba/players/")
