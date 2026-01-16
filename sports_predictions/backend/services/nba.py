@@ -130,19 +130,113 @@ def get_all_player_gamelogs(season='2025-26', min_games=5, delay=0.6):
     # Combine all player data
     combined = pd.concat(all_gamelogs, ignore_index=True)
     
-    print(f"\n✅ Collected {len(combined)} games from {len(all_gamelogs)} players")
+    print(f"\n[DONE] Collected {len(combined)} games from {len(all_gamelogs)} players")
     
     return combined
 
-def get_all_games():
-    #returns all games in season by date 
-    gamelog=LeagueGameLog(
-        season='2025-26',
-        season_type_all_star='Regular Season',
-        player_or_team_abbreviation='T'
-    )
+def get_all_games(seasons=None):
+    """
+    Returns all games across multiple seasons.
+    
+    Args:
+        seasons: List of seasons (e.g., ['2022-23', '2023-24', '2024-25'])
+                 If None, uses last 3 seasons by default
+    
+    Returns:
+        DataFrame with all games
+    """
+    if seasons is None:
+        # Default to last 3 completed seasons plus current
+        seasons = ['2022-23', '2023-24', '2024-25', '2025-26']
+    
+    all_games = []
+    
+    for season in seasons:
+        print(f"Fetching {season} season data...")
+        try:
+            gamelog = LeagueGameLog(
+                season=season,
+                season_type_all_star='Regular Season',
+                player_or_team_abbreviation='T'
+            )
+            
+            df = gamelog.get_data_frames()[0]
+            df['SEASON'] = season  # Add season identifier
+            all_games.append(df)
+            print(f"  [OK] {season}: {len(df)} games fetched")
+            
+            # Sleep to avoid rate limiting
+            time.sleep(0.6)
+            
+        except Exception as e:
+            print(f"  [ERROR] Error fetching {season}: {e}")
+            continue
+    
+    if not all_games:
+        raise ValueError("No game data could be fetched")
+    
+    # Combine all seasons
+    combined_df = pd.concat(all_games, ignore_index=True)
+    
+    # Sort by date
+    combined_df['GAME_DATE'] = pd.to_datetime(combined_df['GAME_DATE'])
+    combined_df = combined_df.sort_values(['GAME_DATE', 'GAME_ID'])
+    
+    print(f"\n[OK] Total games fetched: {len(combined_df)}")
+    print(f"[OK] Date range: {combined_df['GAME_DATE'].min()} to {combined_df['GAME_DATE'].max()}")
+    print(f"[OK] Unique games: {combined_df['GAME_ID'].nunique()}")
+    
+    return combined_df
 
-    df = gamelog.get_data_frames()[0]
+
+def get_all_games_cached(cache_file='data/game_cache.pkl', force_refresh=False, seasons=None):
+    """
+    Returns all games with caching to avoid repeated API calls.
+    
+    Args:
+        cache_file: Path to cache file
+        force_refresh: If True, ignore cache and fetch fresh data
+        seasons: List of seasons to fetch
+    
+    Returns:
+        DataFrame with all games
+    """
+    import os
+    import pickle
+    
+    # Create data directory if it doesn't exist
+    os.makedirs(os.path.dirname(cache_file) if os.path.dirname(cache_file) else 'data', exist_ok=True)
+    
+    # Check if cache exists and is recent
+    if not force_refresh and os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'rb') as f:
+                cached_data = pickle.load(f)
+            
+            # Check if cache is from today
+            cache_date = cached_data.get('date')
+            if cache_date == pd.Timestamp.now().date():
+                print(f"[OK] Using cached data from {cache_date}")
+                return cached_data['data']
+            else:
+                print(f"Cache is old (from {cache_date}), refreshing...")
+        except Exception as e:
+            print(f"Error loading cache: {e}, fetching fresh data...")
+    
+    # Fetch fresh data
+    df = get_all_games(seasons=seasons)
+    
+    # Save to cache
+    try:
+        with open(cache_file, 'wb') as f:
+            pickle.dump({
+                'date': pd.Timestamp.now().date(),
+                'data': df
+            }, f)
+        print(f"[OK] Data cached to {cache_file}")
+    except Exception as e:
+        print(f"Warning: Could not save cache: {e}")
+    
     return df
 
 def get_team_players(teamid):
@@ -152,3 +246,68 @@ def get_team_players(teamid):
         season='2025-26')
     df=teamroster.get_data_frames()[0]
     return df
+
+def get_todays_player_minutes(team_id, season='2025-26'):
+    """
+    Get today's player minutes for a specific team from scoreboard data.
+    
+    Args:
+        team_id: NBA team ID
+        season: NBA season
+    
+    Returns:
+        DataFrame with PLAYER_ID, PLAYER_NAME, MIN, TEAM_ID for today's games
+    """
+    try:
+        from datetime import date
+        today = date.today()
+        
+        # Get all player game logs for today
+        all_players = players.get_players()
+        
+        todays_data = []
+        
+        for player in all_players[:100]:  # Limit to avoid rate limiting
+            try:
+                player_id = player['id']
+                player_name = player['full_name']
+                
+                gamelog = PlayerGameLog(
+                    player_id=player_id,
+                    season=season,
+                    season_type_all_star='Regular Season'
+                )
+                
+                df = gamelog.get_data_frames()[0]
+                
+                if not df.empty:
+                    # Get most recent game (should be today or latest)
+                    latest = df.iloc[0]
+                    game_date = pd.to_datetime(latest['GAME_DATE'])
+                    
+                    if game_date.date() == today:
+                        team_abbr = latest['MATCHUP'].split(' ')[0]
+                        team_mapping = get_team_abbr_to_id_mapping()
+                        team_id_from_game = team_mapping.get(team_abbr)
+                        
+                        if team_id_from_game == team_id:
+                            todays_data.append({
+                                'PLAYER_ID': player_id,
+                                'PLAYER_NAME': player_name,
+                                'MIN': float(latest['MIN']) if latest['MIN'] else 0,
+                                'TEAM_ID': team_id_from_game
+                            })
+                
+                time.sleep(0.1)  # Rate limiting
+                
+            except Exception as e:
+                continue
+        
+        if todays_data:
+            return pd.DataFrame(todays_data)
+        else:
+            return pd.DataFrame(columns=['PLAYER_ID', 'PLAYER_NAME', 'MIN', 'TEAM_ID'])
+    
+    except Exception as e:
+        print(f"Error fetching today's player minutes: {e}")
+        return pd.DataFrame(columns=['PLAYER_ID', 'PLAYER_NAME', 'MIN', 'TEAM_ID'])

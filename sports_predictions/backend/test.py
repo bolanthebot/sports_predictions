@@ -1,17 +1,6 @@
-from datetime import datetime, timedelta
-from nba_api.stats.endpoints import LeagueGameFinder
-from nba_api.stats.static import teams
-import pandas as pd
-from services.nba import get_team
-today = datetime.now()
-#1610612757
-# Get all games for the current season
-gamefinder = LeagueGameFinder(team_id_nullable=1610612757,date_from_nullable=today)
-games_df = gamefinder.get_data_frames()[0]
-print(games_df)
-# Convert GAME_DATE to datetime
-games_df['GAME_DATE'] = pd.to_datetime(games_df['GAME_DATE'])
+from nbainjuries import injury
+from datetime import datetime
 
-# Filter for games in the future
-today = datetime.now()
-future_games = games_df[games_df['GAME_DATE'] > today].sort_values('GAME_DATE')
+json_output = injury.get_reportdata(datetime(year=2026, month=1, day=13, hour=13, minute=30)) 
+print(json_output)
+#df_output = injury.get_reportdata(datetime(year=2025, month=4, day=25, hour=17, minute=30), return_df=True)

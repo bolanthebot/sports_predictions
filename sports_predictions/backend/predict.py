@@ -1,7 +1,9 @@
 import pickle
 import pandas as pd
+import numpy as np
 import os
 from services.nba import get_all_games, get_today_games
+from feature_engineering import create_features  # Import shared function
 
 WIN_MODEL_PATH = "models/win_model.pkl"
 POINTS_MODEL_PATH = "models/points_model.pkl"
@@ -29,72 +31,23 @@ check_model_files()
 try:
     with open(WIN_MODEL_PATH, "rb") as f:
         win_model = pickle.load(f)
-    print("✓ Win model loaded")
+    print("[OK] Win model loaded")
 except Exception as e:
     raise Exception(f"Error loading win model from {WIN_MODEL_PATH}: {e}")
 
 try:
     with open(POINTS_MODEL_PATH, "rb") as f:
         points_model = pickle.load(f)
-    print("✓ Points model loaded")
+    print("[OK] Points model loaded")
 except Exception as e:
     raise Exception(f"Error loading points model from {POINTS_MODEL_PATH}: {e}")
 
 try:
     with open(FEATURES_PATH, "rb") as f:
         FEATURE_NAMES = pickle.load(f)
-    print(f"✓ Feature names loaded ({len(FEATURE_NAMES)} features)")
+    print(f"[OK] Feature names loaded ({len(FEATURE_NAMES)} features)")
 except Exception as e:
     raise Exception(f"Error loading feature names from {FEATURES_PATH}: {e}")
-
-
-# ----------------------------
-# Feature engineering
-# ----------------------------
-def create_features(df):
-    features = pd.DataFrame(index=df.index)
-    stats = ["PTS", "FG_PCT", "FG3_PCT", "FT_PCT", "REB", "AST", "STL", "BLK", "TOV"]
-
-    for stat in stats:
-        features[f"{stat.lower()}_avg_5"] = (
-            df.groupby("TEAM_ID")[stat]
-              .transform(lambda x: x.shift(1).rolling(5, min_periods=3).mean())
-        )
-
-    features["win_pct_5"] = (
-        df.groupby("TEAM_ID")["WL"]
-          .transform(lambda x: x.map({"W": 1, "L": 0})
-                     .shift(1).rolling(5, min_periods=3).mean())
-    )
-
-    features["rest_days"] = (
-        df["GAME_DATE"] - df.groupby("TEAM_ID")["GAME_DATE"].shift(1)
-    ).dt.days.clip(0, 7).fillna(3)
-
-    features["is_home"] = df["MATCHUP"].str.contains("vs.").astype(int)
-
-    # Pace indicators - CREATE BEFORE opponent swap
-    features["pace_avg_5"] = (
-        df.groupby("TEAM_ID")["PTS"]
-          .transform(lambda x: x.shift(1).rolling(5, min_periods=3).mean())
-    )
-
-    opponent = features.groupby(df["GAME_ID"]).apply(lambda x: x.iloc[::-1]).reset_index(drop=True)
-
-    for stat in stats:
-        features[f"{stat.lower()}_diff"] = (
-            features[f"{stat.lower()}_avg_5"] - opponent[f"{stat.lower()}_avg_5"]
-        )
-
-    features["win_pct_diff"] = features["win_pct_5"] - opponent["win_pct_5"]
-    
-    # Opponent pace and combined pace
-    features["opp_pace_avg_5"] = opponent["pace_avg_5"]
-    features["combined_pace"] = features["pace_avg_5"] + features["opp_pace_avg_5"]
-    
-    features["home_strength"] = features["is_home"] * features["pts_avg_5"]
-
-    return features
 
 
 # ----------------------------
@@ -132,15 +85,27 @@ def predict_game(gameid: str, teamid: str):
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
+    # Use shared feature engineering
     features = create_features(history)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]
 
+    # Validate feature names match
+    missing_features = set(FEATURE_NAMES) - set(features.columns)
+    if missing_features:
+        raise ValueError(
+            f"Feature mismatch! Missing features: {missing_features}\n"
+            f"Please retrain the model with 'python training_extended.py'"
+        )
+
     # Today's games
     today_json = get_today_games()
     today_df = get_today_games_flat(today_json)
     today_df = today_df[today_df["GAME_ID"] == str(gameid)]
+
+    if today_df.empty:
+        return None
 
     game_preds = []
 
@@ -150,7 +115,9 @@ def predict_game(gameid: str, teamid: str):
         if team_hist.empty:
             continue
 
+        # Extract features in correct order
         team_feat = features.loc[team_hist.index][FEATURE_NAMES]
+        
         win_prob = win_model.predict_proba(team_feat)[0, 1]
         predicted_points = points_model.predict(team_feat)[0]
 
@@ -197,10 +164,19 @@ def predict_all_games():
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
+    # Use shared feature engineering
     features = create_features(history)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]
+
+    # Validate feature names match
+    missing_features = set(FEATURE_NAMES) - set(features.columns)
+    if missing_features:
+        raise ValueError(
+            f"Feature mismatch! Missing features: {missing_features}\n"
+            f"Please retrain the model with 'python training_extended.py'"
+        )
 
     today_json = get_today_games()
     today_df = get_today_games_flat(today_json)
@@ -217,7 +193,9 @@ def predict_all_games():
             if team_hist.empty:
                 continue
 
+            # Extract features in correct order
             team_feat = features.loc[team_hist.index][FEATURE_NAMES]
+            
             win_prob = win_model.predict_proba(team_feat)[0, 1]
             predicted_points = points_model.predict(team_feat)[0]
 
