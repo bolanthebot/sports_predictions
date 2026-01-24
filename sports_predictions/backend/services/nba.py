@@ -4,6 +4,8 @@ from nba_api.stats.static import players
 from nba_api.stats.static import teams
 import pandas as pd
 import time
+from datetime import date
+from services.cache import cache_get, cache_set, get_cache_path
 from nba_api.stats.endpoints import CommonTeamRoster
 def get_team_abbr_to_id_mapping():
     """Returns mapping of team abbreviations to team IDs"""
@@ -19,12 +21,30 @@ def get_team_abbr_to_id_mapping():
     }
 
 #Returns JSON
+_NBA_CACHE_PATH = get_cache_path("nba_api_cache.pkl")
+_TODAY_GAMES_TTL_SECONDS = 300
+_TEAM_LOG_TTL_SECONDS = 21600
+_PLAYER_LOG_TTL_SECONDS = 21600
+_TEAM_PLAYERS_TTL_SECONDS = 21600
+
+
 def get_today_games():
+    cache_key = f"today_games:{date.today().isoformat()}"
+    cached = cache_get(_NBA_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     games = scoreboard.ScoreBoard()
     games = games.get_dict()
+    cache_set(_NBA_CACHE_PATH, cache_key, games, ttl_seconds=_TODAY_GAMES_TTL_SECONDS)
     return games
 
 def get_team(id):
+    cache_key = f"team_gamelog:2025-26:{id}"
+    cached = cache_get(_NBA_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     gamelog = TeamGameLog(
         team_id=id,
         season='2025-26',
@@ -33,9 +53,15 @@ def get_team(id):
 
     df = gamelog.get_data_frames()[0]
 
+    cache_set(_NBA_CACHE_PATH, cache_key, df, ttl_seconds=_TEAM_LOG_TTL_SECONDS)
     return df
 
 def get_player(id):
+    cache_key = f"player_gamelog:2025-26:{id}"
+    cached = cache_get(_NBA_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     gamelog=PlayerGameLog(
         player_id=id,
         season='2025-26',
@@ -60,6 +86,7 @@ def get_player(id):
         x.split('vs. ')[1] if 'vs.' in x else x.split('@ ')[1]
     )
     df['OPP_TEAM_ID'] = df['OPP_TEAM_ABBR'].map(team_mapping)
+    cache_set(_NBA_CACHE_PATH, cache_key, df, ttl_seconds=_PLAYER_LOG_TTL_SECONDS)
     return df
 
 def get_rotation_players(min_minutes_avg=15, season='2025-26'):
@@ -241,10 +268,16 @@ def get_all_games_cached(cache_file='data/game_cache.pkl', force_refresh=False, 
 
 def get_team_players(teamid):
     """returns: top normal roster players ids on a given team"""
+    cache_key = f"team_players:2025-26:{teamid}"
+    cached = cache_get(_NBA_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     teamroster=CommonTeamRoster(        
         team_id=teamid,
         season='2025-26')
     df=teamroster.get_data_frames()[0]
+    cache_set(_NBA_CACHE_PATH, cache_key, df, ttl_seconds=_TEAM_PLAYERS_TTL_SECONDS)
     return df
 
 def get_todays_player_minutes(team_id, season='2025-26'):

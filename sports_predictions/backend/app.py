@@ -29,7 +29,7 @@ def team_games(id):
 @app.get("/api/nba/teamplayers/")
 def get_active_players(teamid):
     players = get_team_players(teamid)
-    pid = players["PLAYER_ID"].tolist()
+    pid = [players["PLAYER_ID"].tolist(), players["PLAYER"].tolist()]
     return pid
 
 #gets player past games data by id eg http://localhost:8000/api/nba/players/?id=201935
@@ -48,5 +48,8 @@ def predictions(gameid: str, teamid: str):
 @app.get("/api/nba/predictions/player/today/")
 def predictions(playerid: str):
     result = predict_player_points(playerid)
-    print(result)
-    return float(result["predicted_points"])
+    if isinstance(result, dict) and "error" in result:
+        return result
+    if isinstance(result, dict) and "predicted_points" in result:
+        return float(result["predicted_points"])
+    return {"error": "Unexpected response from prediction service", "player_id": playerid}

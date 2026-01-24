@@ -1,16 +1,40 @@
+import os
 import pickle
 import pandas as pd
-from services.nba import get_player, get_today_games,get_all_player_gamelogs
+from datetime import date
+from services.cache import cache_get, cache_set, get_cache_path
+from services.nba import get_player, get_today_games, get_all_player_gamelogs
 
-PLAYER_MODEL_PATH = "models/player_points_model.pkl"
-PLAYER_FEATURES_PATH = "models/player_feature_names.pkl"
+BASE_DIR = os.path.dirname(__file__)
+PLAYER_MODEL_PATH = os.path.join(BASE_DIR, "models", "player_points_model.pkl")
+PLAYER_FEATURES_PATH = os.path.join(BASE_DIR, "models", "player_feature_names.pkl")
 
-# Load model
-with open(PLAYER_MODEL_PATH, "rb") as f:
-    player_model = pickle.load(f)
+player_model = None
+PLAYER_FEATURE_NAMES = None
+PREDICTION_CACHE_PATH = get_cache_path("prediction_cache.pkl")
+PREDICTION_TTL_SECONDS = 1800
+PREDICTION_ERROR_TTL_SECONDS = 300
 
-with open(PLAYER_FEATURES_PATH, "rb") as f:
-    PLAYER_FEATURE_NAMES = pickle.load(f)
+
+def _load_player_assets():
+    global player_model, PLAYER_FEATURE_NAMES
+    if player_model is not None and PLAYER_FEATURE_NAMES is not None:
+        return None
+
+    if not os.path.exists(PLAYER_MODEL_PATH) or os.path.getsize(PLAYER_MODEL_PATH) == 0:
+        return f"Missing or empty model file: {PLAYER_MODEL_PATH}"
+    if not os.path.exists(PLAYER_FEATURES_PATH) or os.path.getsize(PLAYER_FEATURES_PATH) == 0:
+        return f"Missing or empty feature file: {PLAYER_FEATURES_PATH}"
+
+    try:
+        with open(PLAYER_MODEL_PATH, "rb") as f:
+            player_model = pickle.load(f)
+        with open(PLAYER_FEATURES_PATH, "rb") as f:
+            PLAYER_FEATURE_NAMES = pickle.load(f)
+    except Exception as e:
+        return f"Error loading player model assets: {e}"
+
+    return None
 
 
 # ----------------------------
@@ -125,12 +149,25 @@ def predict_player_points(player_id: str, game_date: str = None):
     Returns:
         dict with prediction details
     """
+    cache_key = f"predict_player:{date.today().isoformat()}:{player_id}"
+    cached = cache_get(PREDICTION_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     try:
+        load_error = _load_player_assets()
+        if load_error:
+            result = {"error": load_error, "player_id": player_id}
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+            return result
+
         # Load historical data
         history = pd.DataFrame(get_player(player_id))
         
         if history.empty:
-            return {"error": "No player data available"}
+            result = {"error": "No player data available"}
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+            return result
         
         # Standardize column names
         if 'Player_ID' in history.columns:
@@ -143,15 +180,19 @@ def predict_player_points(player_id: str, game_date: str = None):
         player_hist = history[history["PLAYER_ID"] == int(player_id)]
         
         if player_hist.empty:
-            return {"error": f"Player ID {player_id} not found in database"}
+            result = {"error": f"Player ID {player_id} not found in database"}
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+            return result
         
         # Check if player has enough games
         if len(player_hist) < 3:
-            return {
+            result = {
                 "error": f"Insufficient game history. Player has only {len(player_hist)} games (need at least 3)",
                 "player_id": player_id,
                 "games_played": len(player_hist)
             }
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+            return result
         
         # Create features for entire player dataset
         features = create_player_features(player_hist)
@@ -164,12 +205,14 @@ def predict_player_points(player_id: str, game_date: str = None):
         if not valid.any():
             # Debug: show which features are missing
             missing_features = features.columns[features.isna().any()].tolist()
-            return {
+            result = {
                 "error": "Could not create valid features - insufficient data for rolling averages",
                 "player_id": player_id,
                 "games_played": len(player_hist),
                 "missing_features": missing_features[:5]  # Show first 5 missing
             }
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+            return result
         
         # Get latest valid feature set
         valid_features = features[valid]
@@ -189,7 +232,7 @@ def predict_player_points(player_id: str, game_date: str = None):
         latest_game = player_hist_valid.iloc[-1]
         recent_games = player_hist.tail(5)
         
-        return {
+        result = {
             "player_id": player_id,
             "player_name": latest_game.get("PLAYER_NAME", "Unknown"),
             "team_id": int(latest_game["TEAM_ID"]) if "TEAM_ID" in latest_game else None,
@@ -199,12 +242,16 @@ def predict_player_points(player_id: str, game_date: str = None):
             "games_played": len(player_hist),
             "last_5_games": recent_games["PTS"].tolist()
         }
+        cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_TTL_SECONDS)
+        return result
     
     except Exception as e:
-        return {
+        result = {
             "error": f"Prediction failed: {str(e)}",
             "player_id": player_id
         }
+        cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
+        return result
 
 
 # ----------------------------

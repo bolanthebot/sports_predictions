@@ -40,7 +40,7 @@ TEAM_ID_TO_ABBR = {v: k for k, v in TEAM_ABBR_TO_ID.items()}
 def fetch_espn_injuries(team_abbr=None):
     """
     Fetch NBA injury report from ESPN for a specific team.
-    Uses regex patterns to extract injury data from ESPN's HTML.
+    Uses improved HTML parsing to extract injury data.
     
     Args:
         team_abbr: 2-3 letter team abbreviation (e.g., 'tor', 'bos')
@@ -88,55 +88,133 @@ def fetch_espn_injuries(team_abbr=None):
             print(f"[WARN] Unknown team abbreviation: {team_abbr}")
             return pd.DataFrame(columns=["TEAM_ID", "PLAYER_NAME", "STATUS", "REASON"])
         
-        # Extract text content from page
-        full_text = soup.get_text()
-        
         injuries = []
-        
-        # Use regex to find injury patterns
-        # Looking for: PlayerName + Status (Out/Day-to-day) + Description
+        seen = set()
         import re
         
-        # Pattern: Look for "MonthDayPlayerNameStatusOut" and extract them
-        # This pattern matches: [Optional Month+Day] PlayerFirstName PlayerLastName [Position] Status Out
-        pattern = r'(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\w+(?:\s+\w+)?)\s*[GFC]?Status\s*Out\s*([\w\s\(\)\.,-]+?(?=(?:StatusOut|Jan\s+\d|Feb\s+\d|Health|Sports|$)))'
+        # ESPN embeds injury data directly in link text with format:
+        # "PlayerNamePositionStatusStatusDescriptionMore text..."
+        # We need to extract player names and status from these links
         
-        # Simpler pattern that looks for the core structure
-        simple_pattern = r'(\w+(?:\s+\w+)?)\s*(?:[GFC]?Status)?Out\s*([\w\s\(\)\.,-]+?(?=\w+\s*(?:StatusOut|Status Out|Health|Sports|Jan|Feb|Mar)))'
+        all_links = soup.find_all('a')
         
-        # Find matches using both patterns for maximum coverage
-        seen = set()
-        
-        # Try the simple pattern first
-        for match in re.finditer(simple_pattern, full_text):
-            player_name = match.group(1).strip()
-            reason = match.group(2).strip()[:150]
+        for link in all_links:
+            link_text = link.get_text(strip=True)
             
-            # Clean up player name - remove month/date prefixes, position letters, status suffixes
-            player_name = re.sub(r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s*', '', player_name)
-            player_name = re.sub(r'\d{1,2}\s+', '', player_name)  # Remove any leading numbers
-            player_name = re.sub(r'\s*[GFC]Status$', '', player_name)  # Remove position+Status suffix
-            player_name = re.sub(r'\s+[GFC]$', '', player_name)  # Remove trailing position letter
-            player_name = player_name.strip()
+            # Check if this link contains injury status indicators
+            if not any(status in link_text for status in ['Out', 'Day-to-day', 'Questionable', 'Probable', 'Doubtful']):
+                continue
             
-            # Must be 4+ chars, valid player name
+            # Extract status
+            status = None
+            for s in ['Out', 'Day-to-day', 'Questionable', 'Probable', 'Doubtful']:
+                if s in link_text:
+                    status = s
+                    break
+            
+            if not status:
+                continue
+            
+            # Extract player name - it's typically before the position letter and status
+            # Format: "FirstName LastName Position(G/F/C) Status Rest of text..."
+            # Example: "Zaccharie RisacherFStatusOut..."
+            
+            # Split at status to get the part with player name
+            before_status = link_text.split(status)[0]
+            
+            # Remove position letters at the end (G, F, C, SF, PG, etc) and "Status" suffix
+            player_part = re.sub(r'\s*Status$', '', before_status)  # Remove "Status" suffix
+            player_part = re.sub(r'\s*[A-Z]{1,3}(?:\s*Status)?$', '', player_part)  # Remove position + optional Status
+            
+            # Extract consecutive capitalized words as player name
+            words = player_part.split()
+            player_name_parts = []
+            
+            for word in words:
+                # Skip short words or numbers, but allow names with special characters like N'Faly
+                if word and len(word) >= 2 and (word[0].isupper() or "'" in word):
+                    player_name_parts.append(word)
+                elif word and any(c.isdigit() for c in word):
+                    break  # Stop at dates or numbers
+            
+            if not player_name_parts:
+                continue
+            
+            # Take first two capitalized words as player name (usually first + last)
+            player_name = ' '.join(player_name_parts[:2])
+            
+            # Extract reason/description (text after status)
+            status_idx = link_text.find(status)
+            reason = link_text[status_idx + len(status):].strip()
+            reason = reason[:150] if reason else status
+            
+            # Validate player name
             if (player_name and len(player_name) >= 4 and 
-                not re.match(r'^\d', player_name) and  # Doesn't start with number
+                not re.match(r'^\d', player_name) and
+                player_name not in ['Status', 'Player', 'Name', 'Date', 'Fantasy', 'TicketsExternal'] and
                 (team_id, player_name) not in seen):
                 
                 injuries.append({
                     "TEAM_ID": team_id,
                     "PLAYER_NAME": player_name,
-                    "STATUS": "Out",
+                    "STATUS": status,
                     "REASON": reason
                 })
                 seen.add((team_id, player_name))
+        
+        # Method 2: Full text parsing as fallback if no links found
+        if len(injuries) < 1:
+            print(f"[DEBUG] Link method found {len(injuries)} injuries, trying text extraction...")
+            full_text = soup.get_text()
+            lines = full_text.split('\n')
+            
+            for i in range(len(lines)):
+                line = lines[i].strip()
+                
+                # Check if line contains status indicator
+                status = None
+                for s in ['Out', 'Day-to-day', 'Questionable', 'Probable', 'Doubtful']:
+                    if s in line:
+                        status = s
+                        break
+                
+                if not status:
+                    continue
+                
+                # Try to find player name in this line or previous lines
+                player_name = None
+                combined_text = line
+                
+                # Look in current and previous lines
+                for check_idx in range(max(0, i-2), min(len(lines), i+1)):
+                    check_line = lines[check_idx].strip()
+                    words = check_line.split()
+                    
+                    # Find consecutive capitalized words
+                    for j in range(len(words) - 1):
+                        w1, w2 = words[j], words[j+1]
+                        if (w1 and w1[0].isupper() and len(w1) >= 3 and
+                            w2 and w2[0].isupper() and len(w2) >= 3):
+                            player_name = f"{w1} {w2}"
+                            break
+                    if player_name:
+                        break
+                
+                if player_name and (team_id, player_name) not in seen:
+                    reason = combined_text[:150]
+                    injuries.append({
+                        "TEAM_ID": team_id,
+                        "PLAYER_NAME": player_name,
+                        "STATUS": status,
+                        "REASON": reason
+                    })
+                    seen.add((team_id, player_name))
         
         result_df = pd.DataFrame(injuries)
         if len(result_df) > 0:
             print(f"[OK] Found {len(result_df)} injured players for {team_abbr_upper}")
         else:
-            print(f"[INFO] No 'Out' players for {team_abbr_upper}")
+            print(f"[INFO] No injured players found for {team_abbr_upper}")
         
         return result_df
     
@@ -188,6 +266,7 @@ def fetch_injuries(timestamp=None):
     """
     Fetch NBA injury report from ESPN and rotation player data.
     Uses ESPN injury website and detects players with zero minutes.
+    Only includes rotation players in injury report.
     
     Args:
         timestamp: datetime object (used for logging, ESPN always returns current data)
@@ -202,15 +281,17 @@ def fetch_injuries(timestamp=None):
     try:
         print(f"Fetching injury data for {timestamp.strftime('%Y-%m-%d')}...")
         
-        # Fetch ESPN injury data
-        espn_injuries = fetch_espn_injuries()
-        
-        # Fetch rotation players to find zero-minute players
+        # Fetch rotation players first to filter injuries
         try:
-            rotation_stats = get_rotation_players(min_minutes_avg=5)
+            rotation_stats = get_rotation_players(min_minutes_avg=15)
+            rotation_player_ids = set(rotation_stats['PLAYER_ID'].unique())
         except Exception as e:
             print(f"[WARN] Could not fetch rotation players: {e}")
             rotation_stats = None
+            rotation_player_ids = set()
+        
+        # Fetch ESPN injury data
+        espn_injuries = fetch_espn_injuries()
         
         # Find rotation players with zero minutes
         zero_min_injuries = find_players_with_zero_minutes(rotation_stats)
@@ -243,7 +324,12 @@ def fetch_injuries(timestamp=None):
         
         all_injuries['PLAYER_ID'] = all_injuries.apply(match_player_id, axis=1)
         
-        print(f"[OK] Fetched {len(all_injuries)} total injured players")
+        # Filter to only include rotation players
+        if rotation_player_ids:
+            all_injuries = all_injuries[all_injuries['PLAYER_ID'].isin(rotation_player_ids)].copy()
+            print(f"[OK] Filtered to {len(all_injuries)} injured rotation players")
+        else:
+            print(f"[OK] Fetched {len(all_injuries)} total injured players (no rotation data to filter)")
         
         return all_injuries
     

@@ -5,7 +5,7 @@ For python depenencies run:
 `pip install pandas numpy scikit-learn nba_api FastAPI xgboost`
 
 Run backend from `/sports_predictions/backend`:
-`python -m uvicorn app:app --reload --host 0.0.0.0 --port 8000`
+`py -m uvicorn app:app --reload --host 0.0.0.0 --port 8000`
 
 Run frontend from `/sports_predictions`:
 `npm run dev`

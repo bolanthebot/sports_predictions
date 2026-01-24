@@ -2,12 +2,19 @@ import pickle
 import pandas as pd
 import numpy as np
 import os
-from services.nba import get_all_games, get_today_games
+from datetime import date
+from services.cache import cache_get, cache_set, get_cache_path
+from services.nba import get_all_games_cached, get_today_games
 from feature_engineering import create_features  # Import shared function
 
 WIN_MODEL_PATH = "models/win_model.pkl"
 POINTS_MODEL_PATH = "models/points_model.pkl"
 FEATURES_PATH = "models/feature_names.pkl"
+
+PREDICTION_CACHE_PATH = get_cache_path("prediction_cache.pkl")
+GAME_CACHE_PATH = get_cache_path("game_cache.pkl")
+PREDICTION_TTL_SECONDS = 1800
+ALL_GAMES_PRED_TTL_SECONDS = 600
 
 # Check if model files exist and are valid
 def check_model_files():
@@ -80,8 +87,13 @@ def get_today_games_flat(today_json):
 # Predict game (win probability + points)
 # ----------------------------
 def predict_game(gameid: str, teamid: str):
+    cache_key = f"predict_game:{date.today().isoformat()}:{gameid}:{teamid}"
+    cached = cache_get(PREDICTION_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
     # Historical games
-    history = pd.DataFrame(get_all_games())
+    history = get_all_games_cached(cache_file=GAME_CACHE_PATH)
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
@@ -143,7 +155,7 @@ def predict_game(gameid: str, teamid: str):
     # Return requested team
     for p in game_preds:
         if int(p["team_id"]) == int(teamid):
-            return {
+            result = {
                 "game_id": gameid,
                 "team": p["team"],
                 "team_id": p["team_id"],
@@ -152,6 +164,8 @@ def predict_game(gameid: str, teamid: str):
                 "predicted_team_points": float(p["predicted_points"]),
                 "predicted_total_points": float(total_points)
             }
+            cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_TTL_SECONDS)
+            return result
 
     return None
 
@@ -160,7 +174,12 @@ def predict_game(gameid: str, teamid: str):
 # Get all predictions for today
 # ----------------------------
 def predict_all_games():
-    history = pd.DataFrame(get_all_games())
+    cache_key = f"predict_all_games:{date.today().isoformat()}"
+    cached = cache_get(PREDICTION_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
+    history = get_all_games_cached(cache_file=GAME_CACHE_PATH)
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
@@ -225,4 +244,5 @@ def predict_all_games():
                 "predicted_total": total_points
             })
 
+    cache_set(PREDICTION_CACHE_PATH, cache_key, all_predictions, ttl_seconds=ALL_GAMES_PRED_TTL_SECONDS)
     return all_predictions

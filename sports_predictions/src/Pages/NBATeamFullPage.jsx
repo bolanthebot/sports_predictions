@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Header from "../Components/Header.jsx";
 import ObjectTable from "../Components/ObjectTable";
 import KeyRow from "../Components/KeyRow.jsx";
+import TeamPlayerPredictions from "../Components/TeamPlayerPredictions.jsx";
 
 export default function NBATeamFullPage() {
   const { state } = useLocation();
@@ -93,6 +94,9 @@ export default function NBATeamFullPage() {
             <li>{game.Game_ID}</li>
           ))}
         </div> */}
+      </div>
+      <div className="min-w-2xl max-w-1/2 mt-6">
+        <TeamPlayerPredictions teamId={teamId} />
       </div>
     </div>
   );
