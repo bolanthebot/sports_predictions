@@ -1,19 +1,124 @@
-from fastapi import FastAPI
+import os
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import List
+
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from services.nba import get_today_games,get_team,get_player,get_all_games,get_team_players
-import json
+from fastapi.responses import JSONResponse
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+from services.nba import get_today_games, get_team, get_player, get_all_games, get_team_players
 from predict import predict_game
 from predict_player import predict_player_points
-import pandas as pd
-app = FastAPI()
 
-# Allow frontend access
+# Load environment variables (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Configuration from environment
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "4"))
+
+# CORS configuration
+# Parse allowed origins from environment (comma-separated)
+_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+ALLOWED_ORIGINS = [origin.strip() for origin in _origins_env.split(",") if origin.strip()]
+
+# Azure App Service provides WEBSITE_HOSTNAME
+AZURE_HOSTNAME = os.getenv("WEBSITE_HOSTNAME")
+if AZURE_HOSTNAME:
+    # Running on Azure - auto-detect production mode
+    ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+    logger_startup = logging.getLogger(__name__)
+    logger_startup.info(f"Running on Azure: {AZURE_HOSTNAME}")
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper()),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Thread pool for running blocking prediction calls
+_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    logger.info(f"Starting Sports Predictions API ({ENVIRONMENT})")
+    yield
+    logger.info("Shutting down Sports Predictions API")
+    _executor.shutdown(wait=True)
+
+
+app = FastAPI(
+    title="Sports Predictions API",
+    description="NBA game and player predictions API",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs" if ENVIRONMENT != "production" else None,  # Disable docs in production
+    redoc_url="/redoc" if ENVIRONMENT != "production" else None,
+)
+
+# CORS configuration - use environment-based origins in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": str(exc) if ENVIRONMENT != "production" else None}
+    )
+
+
+# Health check endpoint
+@app.get("/health", tags=["Health"])
+def health_check():
+    """Health check endpoint for load balancers and monitoring."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "environment": ENVIRONMENT
+    }
+
+
+# Readiness check - verifies dependencies are available
+@app.get("/ready", tags=["Health"])
+def readiness_check():
+    """Readiness check - verifies the service can handle requests."""
+    try:
+        # Quick check that we can access NBA API
+        from services.cache import get_cache_path
+        import os
+        cache_path = get_cache_path("nba_api_cache.pkl")
+        cache_exists = os.path.exists(cache_path)
+        
+        return {
+            "status": "ready",
+            "cache_available": cache_exists,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        raise HTTPException(status_code=503, detail="Service not ready")
 #gets todays games returns json
 @app.get("/api/nba/games/today")
 def today_games():
@@ -46,10 +151,49 @@ def predictions(gameid: str, teamid: str):
 #Returns number of points exspected to be scored by a player
 #http://localhost:8000/api/nba/predictions/player/today/?playerid=1629029
 @app.get("/api/nba/predictions/player/today/")
-def predictions(playerid: str):
+def player_prediction(playerid: str):
     result = predict_player_points(playerid)
     if isinstance(result, dict) and "error" in result:
         return result
     if isinstance(result, dict) and "predicted_points" in result:
         return float(result["predicted_points"])
     return {"error": "Unexpected response from prediction service", "player_id": playerid}
+
+
+#Returns predictions for multiple players in a single request (batch endpoint)
+#http://localhost:8000/api/nba/predictions/players/batch/?player_ids=1629029,201935,203507
+@app.get("/api/nba/predictions/players/batch/")
+async def batch_player_predictions(player_ids: str = Query(..., description="Comma-separated player IDs")):
+    """
+    Batch endpoint to get predictions for multiple players at once.
+    Much more efficient than making individual requests.
+    """
+    ids = [pid.strip() for pid in player_ids.split(",") if pid.strip()]
+    
+    if not ids:
+        return {"error": "No player IDs provided", "predictions": {}}
+    
+    # Limit batch size to prevent overload
+    if len(ids) > 25:
+        ids = ids[:25]
+    
+    loop = asyncio.get_event_loop()
+    
+    # Run predictions in thread pool to avoid blocking
+    async def get_prediction(pid: str):
+        try:
+            result = await loop.run_in_executor(_executor, predict_player_points, pid)
+            if isinstance(result, dict) and "predicted_points" in result:
+                return (pid, float(result["predicted_points"]))
+            elif isinstance(result, dict) and "error" in result:
+                return (pid, {"error": result["error"]})
+            return (pid, None)
+        except Exception as e:
+            return (pid, {"error": str(e)})
+    
+    # Run all predictions concurrently
+    tasks = [get_prediction(pid) for pid in ids]
+    results = await asyncio.gather(*tasks)
+    
+    predictions = {pid: value for pid, value in results}
+    return {"predictions": predictions}

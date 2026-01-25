@@ -26,3 +26,36 @@ dist-ssr
 # Python generated stuff
 __pycache__
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.production
+backend/.env
+
+# Cache and data files (regenerated at runtime)
+backend/data/*.pkl
+backend/data/*.csv
+!backend/data/.gitkeep
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Docker
+.docker/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS files
+Thumbs.db
+*.DS_Store

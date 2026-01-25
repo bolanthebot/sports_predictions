@@ -4,6 +4,7 @@ import Header from "../Components/Header.jsx";
 import ObjectTable from "../Components/ObjectTable";
 import KeyRow from "../Components/KeyRow.jsx";
 import TeamPlayerPredictions from "../Components/TeamPlayerPredictions.jsx";
+import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function NBATeamFullPage() {
   const { state } = useLocation();
@@ -20,12 +21,9 @@ export default function NBATeamFullPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(
-        "http://localhost:8000/api/nba/teams/?id=" + teamId
-      );
-      if (!res.ok) throw new Error("Failed to fetch team");
-
-      const data = await res.json();
+      const data = await fetchAPI(API_ENDPOINTS.teams.games, {
+        params: { id: teamId }
+      });
       const teamData = data || [];
       setTeamGames(teamData);
     } catch (err) {

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function PredictionsMain(props) {
   const ids = props.ids || { gameId: props.game, teamId: props.team };
@@ -20,17 +21,9 @@ export default function PredictionsMain(props) {
         return;
       }
 
-      let url =
-        "http://localhost:8000/api/nba/predictions/today/?gameid=" +
-        gameid +
-        "&teamid=" +
-        teamid;
-
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch games");
-
-      const data = await res.json();
-      console.log("Prediction data:", data);
+      const data = await fetchAPI(API_ENDPOINTS.predictions.today, {
+        params: { gameid, teamid }
+      });
 
       setPrediction(data);
     } catch (err) {

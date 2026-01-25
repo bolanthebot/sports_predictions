@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import ActualGame from "../Components/GameFullPage/ActualGame.jsx";
+import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function NBAGameFullPage() {
   const { state } = useLocation();
@@ -16,9 +17,7 @@ export default function NBAGameFullPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("http://localhost:8000/api/nba/games/today");
-        if (!res.ok) throw new Error("Failed to fetch games");
-        const data = await res.json();
+        const data = await fetchAPI(API_ENDPOINTS.games.today);
         const games = data.scoreboard?.games || [];
         const found = games.find(
           (g) => String(g.gameId) === String(params.gameId)

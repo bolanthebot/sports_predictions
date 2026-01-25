@@ -1,34 +1,76 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import NBAGameSnippet from "./NBAGameSnippet.jsx";
+import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
+
+// Debounce delay in milliseconds
+const REFRESH_DEBOUNCE_MS = 2000;
 
 export default function NBADailyGameGrid() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshDisabled, setRefreshDisabled] = useState(false);
+  
+  // Track in-flight requests to prevent duplicates
+  const fetchingRef = useRef(false);
+  const abortControllerRef = useRef(null);
 
-  const fetchGames = async () => {
+  const fetchGames = useCallback(async () => {
+    // Prevent duplicate concurrent requests
+    if (fetchingRef.current) {
+      return;
+    }
+    
     try {
+      fetchingRef.current = true;
       setLoading(true);
       setError(null);
+      
+      // Cancel any previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
 
-      const res = await fetch("http://localhost:8000/api/nba/games/today");
-      if (!res.ok) throw new Error("Failed to fetch games");
-
-      const data = await res.json();
+      const data = await fetchAPI(API_ENDPOINTS.games.today, {
+        signal: abortControllerRef.current.signal
+      });
 
       // Extract games from the nested structure
       const gamesData = data.scoreboard?.games || [];
       setGames(gamesData);
     } catch (err) {
-      setError(err.message);
+      if (err.name !== 'AbortError') {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
+      fetchingRef.current = false;
     }
-  };
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (refreshDisabled) return;
+    
+    // Disable refresh button temporarily to prevent spam
+    setRefreshDisabled(true);
+    fetchGames();
+    
+    setTimeout(() => {
+      setRefreshDisabled(false);
+    }, REFRESH_DEBOUNCE_MS);
+  }, [refreshDisabled, fetchGames]);
 
   useEffect(() => {
     fetchGames();
-  }, []);
+    
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchGames]);
 
   return (
     <div className="min-h-screen p-4">
@@ -38,10 +80,15 @@ export default function NBADailyGameGrid() {
             NBA Games Today
           </h1>
           <button
-            onClick={fetchGames}
-            className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition-colors"
+            onClick={handleRefresh}
+            disabled={refreshDisabled || loading}
+            className={`px-6 py-2 font-semibold rounded-lg transition-colors ${
+              refreshDisabled || loading
+                ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                : "bg-orange-600 hover:bg-orange-700 text-white"
+            }`}
           >
-            Refresh
+            {loading ? "Loading..." : refreshDisabled ? "Wait..." : "Refresh"}
           </button>
         </div>
 
