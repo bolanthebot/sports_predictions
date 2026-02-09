@@ -30,7 +30,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .header {
+    margin-bottom: 24px;
+    gap: 16px;
+  }
 }
 
 .header h1 {
@@ -40,13 +49,23 @@ body {
 
 /* Buttons
 .button {
-  padding: 8px 16px;
+  padding: 10px 14px;
   border-radius: 8px;
   border: none;
   background-color: #111827;
   color: white;
   font-weight: 500;
   cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .button {
+    padding: 8px 16px;
+  }
 }
 
 .button:hover {
@@ -56,16 +75,36 @@ body {
 /* Grid
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .games-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .games-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
 }
 
 /* Card
 .game-card {
   background: white;
-  padding: 16px;
+  padding: 12px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .game-card {
+    padding: 16px;
+  }
 }
 
 .game-meta {
