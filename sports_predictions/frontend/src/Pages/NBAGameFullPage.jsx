@@ -39,7 +39,7 @@ export default function NBAGameFullPage() {
   if (!game) return <div>No game data</div>;
 
   return (
-    <div className="bg-slate-900 flex flex-col px-4">
+    <div className="bg-slate-900 flex flex-col px-3 sm:px-4 md:px-6 py-4 min-h-screen">
       <ActualGame game={game} />
     </div>
   );

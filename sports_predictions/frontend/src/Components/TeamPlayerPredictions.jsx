@@ -121,15 +121,15 @@ export default function TeamPlayerPredictions({ teamId }) {
     return <div className="text-gray-400">No players found</div>;
   
   return (
-    <div className="bg-slate-800 p-4 rounded-lg">
-      <h2 className="text-white font-bold mb-4">Player Point Predictions</h2>
+    <div className="w-full bg-slate-800 p-3 sm:p-4 rounded-lg">
+      <h2 className="text-white font-bold mb-3 sm:mb-4 text-lg sm:text-xl">Player Point Predictions</h2>
       <div className="space-y-2">
         {players.map((playerId, index) => (
           <div
             key={playerId}
-            className="flex justify-between items-center p-2 bg-slate-700 rounded"
+            className="flex justify-between items-center p-2 sm:p-3 bg-slate-700 rounded text-sm sm:text-base"
           >
-            <span className="text-gray-300">{playerNames[index] || `Player ${playerId}`}</span>
+            <span className="text-gray-300 truncate">{playerNames[index] || `Player ${playerId}`}</span>
             {renderPrediction(playerId)}
           </div>
         ))}

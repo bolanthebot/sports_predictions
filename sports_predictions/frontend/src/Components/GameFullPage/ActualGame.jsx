@@ -5,27 +5,27 @@ export default function ActualGame(props) {
   const { game } = props;
 
   return (
-    <div className="min-w-2xl max-w-1/2 bg-slate-800 p-4 items-center">
-      <h1 className="text-white font-bold">ACTUAL GAME:</h1>
-      <p className="mb-2 text-sm font-semibold text-gray-300">
+    <div className="w-full bg-slate-800 p-3 sm:p-4 md:p-6 items-center rounded-lg">
+      <h1 className="text-white font-bold text-lg sm:text-xl">ACTUAL GAME:</h1>
+      <p className="mb-2 text-xs sm:text-sm font-semibold text-gray-300">
         {game.gameStatusText}
       </p>
-      <div className="flex items-center justify-between">
-        <div className="text-left">
-          <p className="text-gray-200 text-xl font-bold">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-1">
+        <div className="text-center sm:text-left w-full sm:w-auto">
+          <p className="text-gray-200 text-lg sm:text-xl font-bold">
             {game.awayTeam.teamCity} {game.awayTeam.teamName}
           </p>
-          <p className="text-white text-3xl font-bold">{game.awayTeam.score}</p>
+          <p className="text-white text-2xl sm:text-3xl font-bold">{game.awayTeam.score}</p>
           <PredictionsMain game={game.gameId} team={game.awayTeam.teamId} />
         </div>
 
         <span className="text-sm font-medium text-gray-300">vs</span>
 
-        <div className="text-right">
-          <p className="text-gray-200 text-xl font-bold">
+        <div className="text-center sm:text-right w-full sm:w-auto">
+          <p className="text-gray-200 text-lg sm:text-xl font-bold">
             {game.homeTeam.teamCity} {game.homeTeam.teamName}
           </p>
-          <p className="text-white text-3xl font-bold">{game.homeTeam.score}</p>
+          <p className="text-white text-2xl sm:text-3xl font-bold">{game.homeTeam.score}</p>
           <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} />
         </div>
       </div>
