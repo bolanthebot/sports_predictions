@@ -1,0 +1,13 @@
+nba-predictions.org, www.nba-predictions.org {
+
+	root * /usr/share/caddy
+	file_server
+
+	# SPA fallback
+	try_files {path} /index.html
+
+	# API reverse proxy
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+}

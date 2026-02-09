@@ -1,5 +1,6 @@
 // API Configuration
-const API_BASE_URL = "http://34.130.192.19/api";
+const API_BASE_URL = "/api";
+console.log(API_BASE_URL);
 
 const API_ENDPOINTS = {
   health: '/health',
@@ -28,7 +29,7 @@ const API_ENDPOINTS = {
  * @returns {string}
  */
 export function buildUrl(endpoint, params = {}) {
-  const url = new URL(`${API_BASE_URL}${endpoint}`);
+  const url = new URL(endpoint, window.location.origin);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
       url.searchParams.append(key, value);
@@ -39,7 +40,7 @@ export function buildUrl(endpoint, params = {}) {
 
 /**
  * Fetch data from API with error handling
- * @param {string} endpoint - The endpoint path
+ * @param {string} edpoint - The endpoint path
  * @param {object} options - Fetch options (can include 'params' for query parameters)
  * @returns {Promise}
  */
