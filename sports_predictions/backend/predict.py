@@ -6,6 +6,7 @@ from datetime import date
 from services.cache import cache_get, cache_set, get_cache_path
 from services.nba import get_all_games_cached, get_today_games
 from feature_engineering import create_features  # Import shared function
+from services.injury_features import compute_team_injury_scores
 
 WIN_MODEL_PATH = "models/win_model.pkl"
 POINTS_MODEL_PATH = "models/points_model.pkl"
@@ -97,8 +98,9 @@ def predict_game(gameid: str, teamid: str):
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
-    # Use shared feature engineering
-    features = create_features(history)
+    # Compute injury impact and build features
+    injuries_df = compute_team_injury_scores(history)
+    features = create_features(history, injuries_df=injuries_df)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]
@@ -183,8 +185,9 @@ def predict_all_games():
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
-    # Use shared feature engineering
-    features = create_features(history)
+    # Compute injury impact and build features
+    injuries_df = compute_team_injury_scores(history)
+    features = create_features(history, injuries_df=injuries_df)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]

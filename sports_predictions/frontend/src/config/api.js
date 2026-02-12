@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = "http://34.130.192.19/api";
+const API_BASE_URL = "http://localhost:8000";
 
 const API_ENDPOINTS = {
   health: '/health',
@@ -10,6 +10,7 @@ const API_ENDPOINTS = {
   teams: {
     games: '/api/nba/teams/',
     players: '/api/nba/teamplayers/',
+    injuries: '/api/nba/injuries/',
   },
   players: {
     games: '/api/nba/players/',

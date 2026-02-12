@@ -4,6 +4,7 @@ import Header from "../Components/Header.jsx";
 import ObjectTable from "../Components/ObjectTable.jsx";
 import KeyRow from "../Components/KeyRow.jsx";
 import TeamPlayerPredictions from "../Components/TeamPlayerPredictions.jsx";
+import TeamInjuries from "../Components/TeamInjuries.jsx";
 import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function NBATeamFullPage() {
@@ -91,6 +92,9 @@ export default function NBATeamFullPage() {
             <li>{game.Game_ID}</li>
           ))}
         </div> */}
+      </div>
+      <div className="w-full mt-4 sm:mt-6">
+        <TeamInjuries teamId={teamId} />
       </div>
       <div className="w-full mt-4 sm:mt-6">
         <TeamPlayerPredictions teamId={teamId} />
