@@ -1,0 +1,28 @@
+{
+  "train_samples": 8889,
+  "test_samples": 2289,
+  "split_date": "2026-01-22 00:00:00",
+  "num_players": 327,
+  "min_minutes_avg": 15.0,
+  "season": "2024-25",
+  "metrics": {
+    "mae": 5.018692493438721,
+    "rmse": 40.582645416259766,
+    "r2": 0.4307030439376831,
+    "within_3": 0.3626037570991699,
+    "within_5": 0.5771079073831368,
+    "within_10": 0.8982088248143294
+  },
+  "top_features": [
+    "fga_avg_5",
+    "pts_avg_5",
+    "fta_avg_5",
+    "usage_avg_5",
+    "ast_avg_5",
+    "ft_pct_trend",
+    "ft_pct_avg_5",
+    "tov_trend",
+    "tov_avg_5",
+    "fg_pct_avg_5"
+  ]
+}

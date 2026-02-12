@@ -1,7 +1,7 @@
 import xgboost as xgb
 import pandas as pd
 import numpy as np
-import pickle
+import json
 import os
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -265,14 +265,12 @@ print(f"\n{'='*60}")
 print("SAVING MODELS")
 print(f"{'='*60}")
 
-with open("models/win_model.pkl", "wb") as f:
-    pickle.dump(win_model, f)
+# Use XGBoost native JSON format (cross-platform: works across Windows/Linux)
+win_model.get_booster().save_model("models/win_model.json")
+pts_model.get_booster().save_model("models/points_model.json")
 
-with open("models/points_model.pkl", "wb") as f:
-    pickle.dump(pts_model, f)
-
-with open("models/feature_names.pkl", "wb") as f:
-    pickle.dump(X.columns.tolist(), f)
+with open("models/feature_names.json", "w") as f:
+    json.dump(X.columns.tolist(), f)
 
 metadata = {
     "train_samples": len(X_train),
@@ -281,9 +279,9 @@ metadata = {
     "num_features": len(X.columns),
     "val_split_date": str(val_split_date),
     "test_split_date": str(test_split_date),
-    "cv_scores": cv_scores,
-    "cv_mean": np.mean(cv_scores),
-    "cv_std": np.std(cv_scores),
+    "cv_scores": [float(s) for s in cv_scores],
+    "cv_mean": float(np.mean(cv_scores)),
+    "cv_std": float(np.std(cv_scores)),
     "win_metrics": {
         "accuracy": float(accuracy_score(y_win_test, y_win_pred)),
         "log_loss": float(log_loss(y_win_test, y_win_proba)),
@@ -301,10 +299,10 @@ metadata = {
     "top_features": feature_importance.head(15).to_dict('records')
 }
 
-with open("models/metadata.pkl", "wb") as f:
-    pickle.dump(metadata, f)
+with open("models/metadata.json", "w") as f:
+    json.dump(metadata, f, indent=2)
 
-print("[DONE] Models saved to /models")
+print("[DONE] Models saved to /models (cross-platform JSON format)")
 print("[DONE] Feature names saved")
 print("[DONE] Metadata saved")
 print(f"\n{'='*60}")

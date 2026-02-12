@@ -22,4 +22,6 @@ print(json_output)
     "Team":"Phoenix Suns",
     "Player Name":"Goodwin, Jordan",
     "Current Status":"Available",
-    "Reason":"Injury\/Illness - Jaw; Sprain (Mask)"""
+    "Reason":"Injury\/Illness - Jaw; Sprain (Mask)
+    ...
+    """

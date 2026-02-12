@@ -1,6 +1,6 @@
 import xgboost as xgb
 import pandas as pd
-import pickle
+import json
 import os
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
@@ -172,7 +172,7 @@ y_pred = model.predict(X_test)
 print("\n--- Player Points Model Performance ---")
 print(f"MAE       : {mean_absolute_error(y_test, y_pred):.2f} points")
 print(f"RMSE      : {mean_squared_error(y_test, y_pred):.2f} points")
-print(f"R² Score  : {r2_score(y_test, y_pred):.3f}")
+print(f"R^2 Score  : {r2_score(y_test, y_pred):.3f}")
 
 # Prediction accuracy within ranges
 within_3 = (abs(y_test - y_pred) <= 3).mean()
@@ -202,17 +202,17 @@ print(importance.head(10).to_string(index=False))
 # -------------------------------------------------
 print("\nSaving model...")
 
-with open("models/player_points_model.pkl", "wb") as f:
-    pickle.dump(model, f)
+# Use XGBoost native JSON format (cross-platform: works across Windows/Linux)
+model.get_booster().save_model("models/player_points_model.json")
 
-with open("models/player_feature_names.pkl", "wb") as f:
-    pickle.dump(X.columns.tolist(), f)
+with open("models/player_feature_names.json", "w") as f:
+    json.dump(X.columns.tolist(), f)
 
 metadata = {
     "train_samples": len(X_train),
     "test_samples": len(X_test),
     "split_date": str(split_date),
-    "num_players": len(valid_players),
+    "num_players": int(len(valid_players)),
     "min_minutes_avg": 15.0,
     "season": "2024-25",
     "metrics": {
@@ -226,10 +226,10 @@ metadata = {
     "top_features": importance.head(10)["feature"].tolist()
 }
 
-with open("models/player_metadata.pkl", "wb") as f:
-    pickle.dump(metadata, f)
+with open("models/player_metadata.json", "w") as f:
+    json.dump(metadata, f, indent=2)
 
-print("\n✅ Player points model saved to models/")
-print("   - player_points_model.pkl")
-print("   - player_feature_names.pkl")
-print("   - player_metadata.pkl")
+print("\n✅ Player points model saved to models/ (cross-platform JSON format)")
+print("   - player_points_model.json")
+print("   - player_feature_names.json")
+print("   - player_metadata.json")
