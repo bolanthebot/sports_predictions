@@ -7,7 +7,7 @@ For python depenencies run:
 Run backend from `/sports_predictions/backend`:
 `py -m uvicorn app:app --reload --host 0.0.0.0 --port 8000`
 
-Run frontend from `/sports_predictions`:
+Run frontend from `/sports_predictions/frontend`:
 `npm run dev`
 
 Once both are running open http://localhost:5173/ in browser.

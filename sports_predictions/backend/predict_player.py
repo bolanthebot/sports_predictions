@@ -1,13 +1,14 @@
 import os
-import pickle
+import json
+import xgboost as xgb
 import pandas as pd
 from datetime import date
 from services.cache import cache_get, cache_set, get_cache_path
 from services.nba import get_player, get_today_games, get_all_player_gamelogs
 
 BASE_DIR = os.path.dirname(__file__)
-PLAYER_MODEL_PATH = os.path.join(BASE_DIR, "models", "player_points_model.pkl")
-PLAYER_FEATURES_PATH = os.path.join(BASE_DIR, "models", "player_feature_names.pkl")
+PLAYER_MODEL_PATH = os.path.join(BASE_DIR, "models", "player_points_model.json")
+PLAYER_FEATURES_PATH = os.path.join(BASE_DIR, "models", "player_feature_names.json")
 
 player_model = None
 PLAYER_FEATURE_NAMES = None
@@ -27,10 +28,10 @@ def _load_player_assets():
         return f"Missing or empty feature file: {PLAYER_FEATURES_PATH}"
 
     try:
-        with open(PLAYER_MODEL_PATH, "rb") as f:
-            player_model = pickle.load(f)
-        with open(PLAYER_FEATURES_PATH, "rb") as f:
-            PLAYER_FEATURE_NAMES = pickle.load(f)
+        player_model = xgb.XGBRegressor()
+        player_model.load_model(PLAYER_MODEL_PATH)
+        with open(PLAYER_FEATURES_PATH, "r") as f:
+            PLAYER_FEATURE_NAMES = json.load(f)
     except Exception as e:
         return f"Error loading player model assets: {e}"
 

@@ -1,4 +1,5 @@
-import pickle
+import xgboost as xgb
+import json
 import pandas as pd
 import numpy as np
 import os
@@ -6,10 +7,11 @@ from datetime import date
 from services.cache import cache_get, cache_set, get_cache_path
 from services.nba import get_all_games_cached, get_today_games
 from feature_engineering import create_features  # Import shared function
+from services.injury_features import compute_team_injury_scores
 
-WIN_MODEL_PATH = "models/win_model.pkl"
-POINTS_MODEL_PATH = "models/points_model.pkl"
-FEATURES_PATH = "models/feature_names.pkl"
+WIN_MODEL_PATH = "models/win_model.json"
+POINTS_MODEL_PATH = "models/points_model.json"
+FEATURES_PATH = "models/feature_names.json"
 
 PREDICTION_CACHE_PATH = get_cache_path("prediction_cache.pkl")
 GAME_CACHE_PATH = get_cache_path("game_cache.pkl")
@@ -34,24 +36,24 @@ def check_model_files():
 print("Checking model files...")
 check_model_files()
 
-# Load models with error handling
+# Load models with error handling (XGBoost native JSON format - cross-platform)
 try:
-    with open(WIN_MODEL_PATH, "rb") as f:
-        win_model = pickle.load(f)
+    win_model = xgb.XGBClassifier()
+    win_model.load_model(WIN_MODEL_PATH)
     print("[OK] Win model loaded")
 except Exception as e:
     raise Exception(f"Error loading win model from {WIN_MODEL_PATH}: {e}")
 
 try:
-    with open(POINTS_MODEL_PATH, "rb") as f:
-        points_model = pickle.load(f)
+    points_model = xgb.XGBRegressor()
+    points_model.load_model(POINTS_MODEL_PATH)
     print("[OK] Points model loaded")
 except Exception as e:
     raise Exception(f"Error loading points model from {POINTS_MODEL_PATH}: {e}")
 
 try:
-    with open(FEATURES_PATH, "rb") as f:
-        FEATURE_NAMES = pickle.load(f)
+    with open(FEATURES_PATH, "r") as f:
+        FEATURE_NAMES = json.load(f)
     print(f"[OK] Feature names loaded ({len(FEATURE_NAMES)} features)")
 except Exception as e:
     raise Exception(f"Error loading feature names from {FEATURES_PATH}: {e}")
@@ -97,8 +99,9 @@ def predict_game(gameid: str, teamid: str):
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
-    # Use shared feature engineering
-    features = create_features(history)
+    # Compute injury impact and build features
+    injuries_df = compute_team_injury_scores(history)
+    features = create_features(history, injuries_df=injuries_df)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]
@@ -183,8 +186,9 @@ def predict_all_games():
     history["GAME_DATE"] = pd.to_datetime(history["GAME_DATE"])
     history = history.sort_values(["TEAM_ID", "GAME_DATE"])
 
-    # Use shared feature engineering
-    features = create_features(history)
+    # Compute injury impact and build features
+    injuries_df = compute_team_injury_scores(history)
+    features = create_features(history, injuries_df=injuries_df)
     valid = ~features.isna().any(axis=1)
     history = history[valid]
     features = features[valid]

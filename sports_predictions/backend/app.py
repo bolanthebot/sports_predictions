@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 from services.nba import get_today_games, get_team, get_player, get_all_games, get_team_players
+from services.injury import fetch_espn_injuries, TEAM_ID_TO_ABBR
 from predict import predict_game
 from predict_player import predict_player_points
 
@@ -72,9 +73,9 @@ app = FastAPI(
 # CORS configuration - use environment-based origins in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ENVIRONMENT == "production" else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -197,3 +198,27 @@ async def batch_player_predictions(player_ids: str = Query(..., description="Com
     
     predictions = {pid: value for pid, value in results}
     return {"predictions": predictions}
+
+
+#Returns injury data for a specific team by team ID
+#http://localhost:8000/api/nba/injuries/?teamid=1610612761
+@app.get("/api/nba/injuries/")
+async def team_injuries(teamid: str):
+    """Get current injury report for a team from ESPN."""
+    try:
+        team_id_int = int(teamid)
+        team_abbr = TEAM_ID_TO_ABBR.get(team_id_int)
+        if not team_abbr:
+            return {"injuries": [], "error": f"Unknown team ID: {teamid}"}
+
+        loop = asyncio.get_event_loop()
+        injuries_df = await loop.run_in_executor(_executor, fetch_espn_injuries, team_abbr.lower())
+
+        if injuries_df.empty:
+            return {"injuries": []}
+
+        injuries_list = injuries_df[["PLAYER_NAME", "STATUS", "REASON"]].to_dict(orient="records")
+        return {"injuries": injuries_list}
+    except Exception as e:
+        logger.error(f"Error fetching injuries for team {teamid}: {e}")
+        return {"injuries": [], "error": str(e)}

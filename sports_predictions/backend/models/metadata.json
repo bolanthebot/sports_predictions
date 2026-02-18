@@ -1,0 +1,91 @@
+{
+  "train_samples": 6146,
+  "val_samples": 1334,
+  "test_samples": 1324,
+  "num_features": 123,
+  "val_split_date": "2025-01-29 00:00:00",
+  "test_split_date": "2025-11-09 00:00:00",
+  "cv_scores": [
+    0.6534885986637337,
+    0.6498868212453902,
+    0.7056039084476188
+  ],
+  "cv_mean": 0.6696597761189143,
+  "cv_std": 0.025458838501790697,
+  "win_metrics": {
+    "accuracy": 0.6072507552870091,
+    "log_loss": 0.6556524984596807,
+    "roc_auc": 0.6635048055421181
+  },
+  "points_metrics": {
+    "mae": 9.78795051574707,
+    "rmse": 12.298873874627073,
+    "r2": 0.07013159990310669,
+    "within_3": 0.19939577039274925,
+    "within_5": 0.3217522658610272,
+    "within_8": 0.4773413897280967,
+    "baseline_mae_pts_avg_5": 10.973413897280967
+  },
+  "top_features": [
+    {
+      "feature": "elo_diff",
+      "importance": 0.05934956669807434
+    },
+    {
+      "feature": "point_diff_diff_10",
+      "importance": 0.030566060915589333
+    },
+    {
+      "feature": "elo_home_interaction",
+      "importance": 0.015832027420401573
+    },
+    {
+      "feature": "home_strength",
+      "importance": 0.014994131401181221
+    },
+    {
+      "feature": "is_home",
+      "importance": 0.01405358873307705
+    },
+    {
+      "feature": "opp_elo",
+      "importance": 0.012984153814613819
+    },
+    {
+      "feature": "point_diff_avg_10",
+      "importance": 0.012775572948157787
+    },
+    {
+      "feature": "rest_days",
+      "importance": 0.012727358378469944
+    },
+    {
+      "feature": "rest_advantage",
+      "importance": 0.012125362642109394
+    },
+    {
+      "feature": "is_back_to_back",
+      "importance": 0.011776047758758068
+    },
+    {
+      "feature": "ast_diff_5",
+      "importance": 0.01154878456145525
+    },
+    {
+      "feature": "win_pct_diff_3",
+      "importance": 0.011182237416505814
+    },
+    {
+      "feature": "season_win_pct",
+      "importance": 0.010818026028573513
+    },
+    {
+      "feature": "elo",
+      "importance": 0.01081366278231144
+    },
+    {
+      "feature": "win_pct_diff_5",
+      "importance": 0.010628658346831799
+    }
+  ]
+}
