@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
+import { fetchPrediction as fetchPredictionAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function PredictionsMain(props) {
   const ids = props.ids || { gameId: props.game, teamId: props.team };
@@ -8,6 +8,7 @@ export default function PredictionsMain(props) {
 
   const [prediction, setPrediction] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [warmingUp, setWarmingUp] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchPrediction = async () => {
@@ -21,11 +22,15 @@ export default function PredictionsMain(props) {
         return;
       }
 
-      const data = await fetchAPI(API_ENDPOINTS.predictions.today, {
-        params: { gameid, teamid }
-      });
+      const { data, warmingUp: isWarmingUp } = await fetchPredictionAPI(
+        API_ENDPOINTS.predictions.today,
+        { params: { gameid, teamid } }
+      );
 
-      setPrediction(data);
+      setWarmingUp(isWarmingUp);
+      if (!isWarmingUp) {
+        setPrediction(data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -44,7 +49,8 @@ export default function PredictionsMain(props) {
   percent = percent.toFixed(2) + "%";
   let predicted_points = Math.round(pp * 10) / 10;
 
-  if (loading) return <p className="text-gray-700">Loading prediction...</p>;
+  if (loading) return <p className="text-gray-400">Loading prediction...</p>;
+  if (warmingUp) return <p className="text-yellow-400">Generating predictions, please wait...</p>;
   return (
     <div>
       <p className="text-gray-400">Win Chance: {percent}</p>

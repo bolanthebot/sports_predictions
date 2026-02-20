@@ -73,6 +73,27 @@ export async function fetchAPI(endpoint, options = {}) {
 }
 
 /**
+ * Fetch a prediction endpoint with automatic retry when the backend is still warming up.
+ * Returns { data, warmingUp } so components can show appropriate UI.
+ */
+export async function fetchPrediction(endpoint, options = {}, { maxRetries = 8, baseDelay = 4000 } = {}) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const data = await fetchAPI(endpoint, options);
+
+    if (data?.status !== "warming_up") {
+      return { data, warmingUp: false };
+    }
+
+    if (attempt === maxRetries) {
+      return { data, warmingUp: true };
+    }
+
+    const delay = baseDelay + attempt * 2000;
+    await new Promise(r => setTimeout(r, delay));
+  }
+}
+
+/**
  * Check if the API is healthy
  * @returns {Promise<boolean>}
  */

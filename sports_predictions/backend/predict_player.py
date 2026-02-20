@@ -13,7 +13,7 @@ PLAYER_FEATURES_PATH = os.path.join(BASE_DIR, "models", "player_feature_names.js
 player_model = None
 PLAYER_FEATURE_NAMES = None
 PREDICTION_CACHE_PATH = get_cache_path("prediction_cache.pkl")
-PREDICTION_TTL_SECONDS = 1800
+PREDICTION_TTL_SECONDS = 86400  # 24 hours — keys are date-scoped so one computation per day
 PREDICTION_ERROR_TTL_SECONDS = 300
 
 
