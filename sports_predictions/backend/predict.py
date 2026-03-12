@@ -15,8 +15,8 @@ FEATURES_PATH = "models/feature_names.json"
 
 PREDICTION_CACHE_PATH = get_cache_path("prediction_cache.pkl")
 GAME_CACHE_PATH = get_cache_path("game_cache.pkl")
-PREDICTION_TTL_SECONDS = 1800
-ALL_GAMES_PRED_TTL_SECONDS = 600
+PREDICTION_TTL_SECONDS = 86400  # 24 hours — keys are date-scoped so one computation per day
+ALL_GAMES_PRED_TTL_SECONDS = 86400
 
 # Check if model files exist and are valid
 def check_model_files():
@@ -236,6 +236,19 @@ def predict_all_games():
                 p["win_probability"] = round(p["raw_prob"] / total, 3)
 
             total_points = round(game_preds[0]["predicted_points"] + game_preds[1]["predicted_points"], 1)
+
+            # Pre-populate individual game caches so predict_game() hits cache
+            for p in game_preds:
+                individual_key = f"predict_game:{date.today().isoformat()}:{game_id}:{p['team_id']}"
+                cache_set(PREDICTION_CACHE_PATH, individual_key, {
+                    "game_id": game_id,
+                    "team": p["team"],
+                    "team_id": p["team_id"],
+                    "is_home": p["is_home"],
+                    "win_probability": float(p["win_probability"]),
+                    "predicted_team_points": float(p["predicted_points"]),
+                    "predicted_total_points": float(total_points)
+                }, ttl_seconds=PREDICTION_TTL_SECONDS)
 
             all_predictions.append({
                 "game_id": game_id,

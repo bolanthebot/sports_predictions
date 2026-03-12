@@ -9,16 +9,18 @@ import ScrollToTop from "./Components/ScrollToTop.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <div className="bg-slate-900 min-h-screen">
+  <div className="min-h-screen py-4 sm:py-6">
     <React.StrictMode>
       <BrowserRouter>
-        <ScrollToTop />
-        <Header />
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/game/:gameId" element={<NBAGameFullPage />} />
-          <Route path="/team/:teamId" element={<NBATeamFullPage />} />
-        </Routes>
+        <div className="app-shell">
+          <ScrollToTop />
+          <Header />
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/game/:gameId" element={<NBAGameFullPage />} />
+            <Route path="/team/:teamId" element={<NBATeamFullPage />} />
+          </Routes>
+        </div>
       </BrowserRouter>
     </React.StrictMode>
   </div>

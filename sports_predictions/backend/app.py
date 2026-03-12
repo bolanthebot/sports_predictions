@@ -1,7 +1,8 @@
 import os
 import logging
+import threading
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, date
 from typing import List
 
 from fastapi import FastAPI, Query, HTTPException
@@ -13,7 +14,8 @@ import asyncio
 
 from services.nba import get_today_games, get_team, get_player, get_all_games, get_team_players
 from services.injury import fetch_espn_injuries, TEAM_ID_TO_ABBR
-from predict import predict_game
+from services.cache import cache_get
+from predict import predict_game, predict_all_games, PREDICTION_CACHE_PATH
 from predict_player import predict_player_points
 
 # Load environment variables (for local development)
@@ -51,11 +53,31 @@ logger = logging.getLogger(__name__)
 # Thread pool for running blocking prediction calls
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
+# Warmup state — tracks whether game predictions have been pre-computed
+_warmup_complete = threading.Event()
+_warmup_error = None
+
+
+def _run_warmup():
+    """Pre-compute all game predictions so user requests never trigger heavy computation."""
+    global _warmup_error
+    try:
+        logger.info("Warmup: pre-computing game predictions...")
+        predict_all_games()
+        logger.info("Warmup: game predictions cached successfully")
+    except Exception as e:
+        _warmup_error = str(e)
+        logger.error(f"Warmup failed: {e}", exc_info=True)
+    finally:
+        _warmup_complete.set()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info(f"Starting Sports Predictions API ({ENVIRONMENT})")
+    warmup_thread = threading.Thread(target=_run_warmup, daemon=True)
+    warmup_thread.start()
     yield
     logger.info("Shutting down Sports Predictions API")
     _executor.shutdown(wait=True)
@@ -146,8 +168,29 @@ def player_games(id):
 #http://localhost:8000/api/nba/predictions/today/?gameid=0022500423&teamid=1610612737
 @app.get("/api/nba/predictions/today/")
 def predictions(gameid: str, teamid: str):
+    # Fast path: check cache directly (instant if warmup already populated it)
+    cache_key = f"predict_game:{date.today().isoformat()}:{gameid}:{teamid}"
+    cached = cache_get(PREDICTION_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
+    # Cache miss — if warmup is still running, tell the client to retry
+    # instead of triggering the slow computation on this request
+    if not _warmup_complete.is_set():
+        return {"status": "warming_up", "message": "Predictions are being generated. Please retry in a few seconds."}
+
+    # Warmup finished but this specific game wasn't cached (edge case)
     result = predict_game(gameid, teamid)
     return result
+
+
+@app.get("/api/nba/predictions/status")
+def prediction_status():
+    """Check if game predictions have been pre-computed and are ready to serve."""
+    return {
+        "ready": _warmup_complete.is_set(),
+        "error": _warmup_error,
+    }
 
 #Returns number of points exspected to be scored by a player
 #http://localhost:8000/api/nba/predictions/player/today/?playerid=1629029

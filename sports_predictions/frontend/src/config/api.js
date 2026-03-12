@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 const API_ENDPOINTS = {
   health: '/health',
@@ -69,6 +69,27 @@ export async function fetchAPI(endpoint, options = {}) {
       console.error('API call failed:', error);
     }
     throw error;
+  }
+}
+
+/**
+ * Fetch a prediction endpoint with automatic retry when the backend is still warming up.
+ * Returns { data, warmingUp } so components can show appropriate UI.
+ */
+export async function fetchPrediction(endpoint, options = {}, { maxRetries = 8, baseDelay = 4000 } = {}) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const data = await fetchAPI(endpoint, options);
+
+    if (data?.status !== "warming_up") {
+      return { data, warmingUp: false };
+    }
+
+    if (attempt === maxRetries) {
+      return { data, warmingUp: true };
+    }
+
+    const delay = baseDelay + attempt * 2000;
+    await new Promise(r => setTimeout(r, delay));
   }
 }
 
