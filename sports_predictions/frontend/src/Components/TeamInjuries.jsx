@@ -37,33 +37,33 @@ export default function TeamInjuries({ teamId }) {
 
   if (loading) {
     return (
-      <div className="w-full bg-slate-800 p-3 sm:p-4 rounded-lg">
-        <h2 className="text-white font-bold mb-3 sm:mb-4 text-lg sm:text-xl">
+      <div className="panel w-full p-4 sm:p-5">
+        <h2 className="mb-3 text-lg font-bold text-white sm:mb-4 sm:text-xl">
           Injury Report
         </h2>
-        <div className="text-gray-400">Loading injuries...</div>
+        <div className="text-slate-300">Loading injuries...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="w-full bg-slate-800 p-3 sm:p-4 rounded-lg">
-        <h2 className="text-white font-bold mb-3 sm:mb-4 text-lg sm:text-xl">
+      <div className="panel w-full p-4 sm:p-5">
+        <h2 className="mb-3 text-lg font-bold text-white sm:mb-4 sm:text-xl">
           Injury Report
         </h2>
-        <div className="text-red-400">Error loading injuries</div>
+        <div className="text-red-300">Error loading injuries</div>
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-slate-800 p-3 sm:p-4 rounded-lg">
-      <h2 className="text-white font-bold mb-3 sm:mb-4 text-lg sm:text-xl">
+    <div className="panel w-full p-4 sm:p-5">
+      <h2 className="mb-3 text-lg font-bold text-white sm:mb-4 sm:text-xl">
         Injury Report
       </h2>
       {injuries.length === 0 ? (
-        <div className="text-green-400 text-sm sm:text-base">
+        <div className="text-sm text-green-300 sm:text-base">
           No injuries reported — full health
         </div>
       ) : (
@@ -75,7 +75,7 @@ export default function TeamInjuries({ teamId }) {
             return (
               <div
                 key={index}
-                className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-2 sm:p-3 bg-slate-700 rounded gap-1 sm:gap-2"
+                className="flex flex-col gap-1 rounded-lg border border-slate-700/60 bg-slate-700/35 p-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:p-3"
               >
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   <span className="text-gray-200 font-medium truncate text-sm sm:text-base">

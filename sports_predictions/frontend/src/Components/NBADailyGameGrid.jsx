@@ -73,19 +73,19 @@ export default function NBADailyGameGrid() {
   }, [fetchGames]);
 
   return (
-    <div className="min-h-screen p-3 sm:p-4 md:p-6">
+    <div className="pb-6 sm:pb-8">
       <div className="w-full">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl text-center font-bold text-white ">
+        <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl md:text-4xl">
             NBA Games Today
           </h1>
           <button
             onClick={handleRefresh}
             disabled={refreshDisabled || loading}
-            className={`px-6 py-2 font-semibold rounded-lg transition-colors ${
+            className={`rounded-lg px-5 py-2.5 text-sm font-semibold tracking-wide transition-colors ${
               refreshDisabled || loading
-                ? "bg-gray-600 cursor-not-allowed text-gray-400"
-                : "bg-orange-600 hover:bg-orange-700 text-white"
+                ? "cursor-not-allowed bg-slate-700 text-slate-400"
+                : "bg-orange-500 text-slate-950 hover:bg-orange-400"
             }`}
           >
             {loading ? "Loading..." : refreshDisabled ? "Wait..." : "Refresh"}
@@ -93,22 +93,22 @@ export default function NBADailyGameGrid() {
         </div>
 
         {loading && (
-          <p className="text-center text-gray-300 text-lg">Loading games...</p>
+          <p className="panel p-6 text-center text-lg text-slate-300">Loading games...</p>
         )}
 
         {error && (
-          <p className="text-center text-red-400 bg-red-900/30 p-4 rounded-lg">
+          <p className="rounded-lg border border-red-500/40 bg-red-900/20 p-4 text-center text-red-300">
             {error}
           </p>
         )}
 
         {!loading && !error && games.length === 0 && (
-          <p className="text-center text-gray-400 text-lg">
+          <p className="panel p-6 text-center text-lg text-slate-300">
             No games scheduled for today
           </p>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {games.map((game) => {
             return <NBAGameSnippet game={game} key={game.gameId} />;
           })}

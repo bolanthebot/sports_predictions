@@ -1,5 +1,67 @@
 import { Link } from "react-router-dom";
-import PredictionsMain from "./PredictionsMain";
+
+const TEAM_COLORS = {
+  ATL: "#E03A3E",
+  BKN: "#000000",
+  BOS: "#007A33",
+  CHA: "#1D1160",
+  CHI: "#CE1141",
+  CLE: "#6F263D",
+  DAL: "#00538C",
+  DEN: "#0E2240",
+  DET: "#C8102E",
+  GSW: "#1D428A",
+  HOU: "#CE1141",
+  IND: "#002D62",
+  LAC: "#C8102E",
+  LAL: "#552583",
+  MEM: "#5D76A9",
+  MIA: "#98002E",
+  MIL: "#00471B",
+  MIN: "#0C2340",
+  NOP: "#0C2340",
+  NYK: "#006BB6",
+  OKC: "#007AC1",
+  ORL: "#0077C0",
+  PHI: "#006BB6",
+  PHX: "#1D1160",
+  POR: "#E03A3E",
+  SAC: "#5A2D81",
+  SAS: "#C4CED4",
+  TOR: "#CE1141",
+  UTA: "#002B5C",
+  WAS: "#002B5C",
+};
+
+function getRgbFromHex(hex) {
+  const normalized = hex.replace("#", "");
+  const value = parseInt(normalized, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  };
+}
+
+function getTeamButtonStyles(teamTricode) {
+  const baseColor = TEAM_COLORS[teamTricode] || "#334155";
+  const { r, g, b } = getRgbFromHex(baseColor);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  const isLightColor = brightness > 150;
+
+  return {
+    container: {
+      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.25)`,
+      borderColor: `rgba(${r}, ${g}, ${b}, 0.75)`,
+    },
+    primaryText: {
+      color: isLightColor ? "#0f172a" : "#f8fafc",
+    },
+    secondaryText: {
+      color: isLightColor ? "rgba(15, 23, 42, 0.75)" : "rgba(248, 250, 252, 0.76)",
+    },
+  };
+}
 
 function NBAGameSnippet(props) {
   const { game } = props;
@@ -10,11 +72,6 @@ function NBAGameSnippet(props) {
     return game.gameStatusText;
   };
 
-  const formatTime = (timeString) => {
-    // Convert "3:30 pm ET" format or use as-is
-    return timeString;
-  };
-
   const status = getGameStatus(game);
   const gameStatus = game.gameStatus;
   const awayTeam = `${game.awayTeam.teamCity} ${game.awayTeam.teamName}`;
@@ -23,69 +80,76 @@ function NBAGameSnippet(props) {
   const homeScore = game.homeTeam.score || 0;
   const awayRecord = `${game.awayTeam.wins}-${game.awayTeam.losses}`;
   const homeRecord = `${game.homeTeam.wins}-${game.homeTeam.losses}`;
+  const awayStyles = getTeamButtonStyles(game.awayTeam.teamTricode);
+  const homeStyles = getTeamButtonStyles(game.homeTeam.teamTricode);
 
   return (
-    <div
-      key={game.gameId}
-      className="bg-slate-800/50 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-700 hover:border-purple-500 transition-colors"
-    >
-      <Link to={`/game/${game.gameId}`} state={{ game: game }}>
-        <div className="flex justify-between items-center mb-4 text-sm">
-          <span className="text-gray-400">{game.gameStatusText}</span>
+    <article className="panel px-4 py-3 transition-colors hover:border-orange-400/60">
+      <Link to={`/game/${game.gameId}`} state={{ game: game }} className="block">
+        <div className="mb-4 flex items-center justify-between text-sm">
+          <span className="text-slate-400">{game.gameStatusText}</span>
           <span
-            className={`px-3 py-1 rounded-full font-semibold ${
+            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
               status === "Live"
-                ? "bg-red-600 text-white animate-pulse"
+                ? "animate-pulse bg-red-600 text-white"
                 : status === "Final"
-                ? "bg-gray-600 text-gray-200"
-                : "bg-blue-600 text-white"
+                ? "bg-slate-700 text-slate-200"
+                : "bg-blue-500 text-white"
             }`}
           >
             {status}
           </span>
         </div>
 
-        <div className="flex flex-col gap-y-3">
-          <Link
-            to={`/team/${game.awayTeam.teamId}`}
-            state={{ team: game.awayTeam }}
-          >
-            <div className="flex justify-between items-center p-2 rounded bg-slate-700/50 hover:bg-slate-700/90">
-              <div className="flex flex-col">
-                <p
-                  to={`/team/${game.awayTeam.teamId}`}
-                  state={{ team: game.awayTeam }}
-                  className="text-white font-medium"
-                >
-                  {awayTeam}
-                </p>
-                <span className="text-xs text-gray-400">{awayRecord}</span>
-              </div>
-              <span className="text-xl font-bold text-white">
-                {gameStatus === 1 ? "—" : awayScore}
-              </span>
-              {/* <PredictionsMain game={game.gameId} team={game.awayTeam.teamId} /> */}
-            </div>
-          </Link>
-
-          <Link
-            to={`/team/${game.homeTeam.teamId}`}
-            state={{ team: game.homeTeam }}
-          >
-            <div className="flex justify-between items-center p-2 rounded bg-slate-700/50 hover:bg-slate-700/90">
-              <div className="flex flex-col">
-                <p className="text-white font-medium">{homeTeam}</p>
-                <span className="text-xs text-gray-400">{homeRecord}</span>
-              </div>
-              <span className="text-xl font-bold text-white">
-                {gameStatus === 1 ? "—" : homeScore}
-              </span>
-              {/* <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} /> */}
-            </div>
-          </Link>
+        <div className="mb-1 text-xs uppercase tracking-[0.12em] text-slate-500">
+          View game details
         </div>
       </Link>
-    </div>
+
+      <div className="flex flex-col gap-3">
+        <Link
+          to={`/team/${game.awayTeam.teamId}`}
+          state={{ team: game.awayTeam }}
+          className="rounded-lg border p-3 transition-[filter] duration-150 hover:brightness-110"
+          style={awayStyles.container}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <p className="font-medium" style={awayStyles.primaryText}>
+                {awayTeam}
+              </p>
+              <span className="text-xs" style={awayStyles.secondaryText}>
+                {awayRecord}
+              </span>
+            </div>
+            <span className="text-2xl font-bold" style={awayStyles.primaryText}>
+              {gameStatus === 1 ? "—" : awayScore}
+            </span>
+          </div>
+        </Link>
+
+        <Link
+          to={`/team/${game.homeTeam.teamId}`}
+          state={{ team: game.homeTeam }}
+          className="rounded-lg border p-3 transition-[filter] duration-150 hover:brightness-110"
+          style={homeStyles.container}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <p className="font-medium" style={homeStyles.primaryText}>
+                {homeTeam}
+              </p>
+              <span className="text-xs" style={homeStyles.secondaryText}>
+                {homeRecord}
+              </span>
+            </div>
+            <span className="text-2xl font-bold" style={homeStyles.primaryText}>
+              {gameStatus === 1 ? "—" : homeScore}
+            </span>
+          </div>
+        </Link>
+      </div>
+    </article>
   );
 }
 

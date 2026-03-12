@@ -1,7 +1,5 @@
 import { useLocation, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import Header from "../Components/Header.jsx";
-import ObjectTable from "../Components/ObjectTable.jsx";
+import { useCallback, useEffect, useState } from "react";
 import KeyRow from "../Components/KeyRow.jsx";
 import TeamPlayerPredictions from "../Components/TeamPlayerPredictions.jsx";
 import TeamInjuries from "../Components/TeamInjuries.jsx";
@@ -17,7 +15,7 @@ export default function NBATeamFullPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchTeamGames = async () => {
+  const fetchTeamGames = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -32,71 +30,77 @@ export default function NBATeamFullPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [teamId]);
 
   useEffect(() => {
     fetchTeamGames();
-  }, []);
+  }, [fetchTeamGames]);
 
-  console.log(typeof teamGames);
+  if (!team) {
+    return <div className="panel p-6 text-slate-300">Loading team {params.teamId}...</div>;
+  }
 
-  if (!team) return <div>Loading team {params.teamId}...</div>;
+  const periodRows = (team.periods || []).slice(0, 4);
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 flex flex-col min-h-screen bg-slate-900">
-      <div className="w-full bg-slate-800 p-3 sm:p-4 md:p-6 rounded-lg">
-        <div className="flex flex-col sm:flex-row text-2xl sm:text-3xl font-bold mb-4 text-white gap-2">
+    <div className="flex flex-col gap-4 pb-6 sm:gap-6 sm:pb-8">
+      <section className="panel w-full p-4 sm:p-5 md:p-6">
+        <div className="mb-5 flex flex-col gap-1 text-2xl font-bold text-white sm:flex-row sm:items-baseline sm:gap-2 sm:text-3xl">
           <h1>
             {team.teamCity} {team.teamName}
           </h1>
-          <h1 className="ml-2">- {team.teamTricode}</h1>
+          <h1 className="text-slate-300">- {team.teamTricode}</h1>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 sm:gap-x-12 gap-y-2 text-sm sm:text-md mb-6">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-2 text-sm sm:grid-cols-2 sm:text-base">
           <KeyRow label="teamId" value={team.teamId} />
           <div></div>
           <KeyRow label="Wins" value={team.wins} />
           <KeyRow label="Losses" value={team.losses} />
-          <p className="text-white font-bold">Last/Current Game</p>
+          <p className="mt-2 font-bold text-white">Last/Current Game</p>
           <div></div>
           <KeyRow label="Score" value={team.score} />
           <KeyRow label="Seed" value={team.seed ?? "null"} />
           <KeyRow label="inBonus" value={team.inBonus} />
-          <KeyRow label="Timouts Remaining" value={team.timeoutsRemaining} />
-          <p className="text-white font-bold">Period Scores</p>
+          <KeyRow label="Timeouts Remaining" value={team.timeoutsRemaining} />
+          <p className="mt-2 font-bold text-white">Period Scores</p>
           <div></div>
-          <KeyRow
-            label={"Period " + team.periods[0].period}
-            value={team.periods[0].score}
-          />
-          <KeyRow
-            label={"Period " + team.periods[1].period}
-            value={team.periods[1].score}
-          />
-          <KeyRow
-            label={"Period " + team.periods[2].period}
-            value={team.periods[2].score}
-          />
-          <KeyRow
-            label={"Period " + team.periods[3].period}
-            value={team.periods[3].score}
-          />
+          {periodRows.length > 0 ? (
+            periodRows.map((periodData) => (
+              <KeyRow
+                key={periodData.period}
+                label={"Period " + periodData.period}
+                value={periodData.score}
+              />
+            ))
+          ) : (
+            <KeyRow label="Period Scores" value="No period data" />
+          )}
         </div>
-      </div>
-      <div className="w-full bg-slate-800 p-3 sm:p-4 md:p-6 rounded-lg mt-4 sm:mt-6">
-        <div className="text-white font-bold mb-4">
-          <h1>Game History WIP</h1>
+      </section>
+      <section className="panel w-full p-4 sm:p-5 md:p-6">
+        <div className="mb-4 font-bold text-white">
+          <h1>Game History (WIP)</h1>
         </div>
-        {/* <div className="grid grid-cols-1 gap-x-12 gap-y-2 text-md mb-6">
+        {loading ? (
+          <p className="text-slate-300">Loading recent team games...</p>
+        ) : error ? (
+          <p className="text-red-300">Unable to load team games.</p>
+        ) : (
+          <p className="text-slate-300">
+            Loaded {teamGames.length} team game records.
+          </p>
+        )}
+        {/* <div className="mb-6 grid grid-cols-1 gap-x-12 gap-y-2 text-md">
           <KeyRow label="Total Games" value={teamGames.length} />
           {teamGames.map((game) => (
             <li>{game.Game_ID}</li>
           ))}
         </div> */}
-      </div>
-      <div className="w-full mt-4 sm:mt-6">
+      </section>
+      <div className="w-full">
         <TeamInjuries teamId={teamId} />
       </div>
-      <div className="w-full mt-4 sm:mt-6">
+      <div className="w-full">
         <TeamPlayerPredictions teamId={teamId} />
       </div>
     </div>

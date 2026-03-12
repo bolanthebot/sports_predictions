@@ -115,19 +115,19 @@ export default function TeamPlayerPredictions({ teamId }) {
     return <span className="text-gray-400">—</span>;
   };
 
-  if (loading) return <div className="text-gray-400">Loading players...</div>;
-  if (error) return <div className="text-red-400">Error: {error}</div>;
+  if (loading) return <div className="panel p-4 text-slate-300">Loading players...</div>;
+  if (error) return <div className="panel p-4 text-red-300">Error: {error}</div>;
   if (!players || players.length === 0)
-    return <div className="text-gray-400">No players found</div>;
+    return <div className="panel p-4 text-slate-300">No players found</div>;
   
   return (
-    <div className="w-full bg-slate-800 p-3 sm:p-4 rounded-lg">
-      <h2 className="text-white font-bold mb-3 sm:mb-4 text-lg sm:text-xl">Player Point Predictions</h2>
+    <div className="panel w-full p-4 sm:p-5">
+      <h2 className="mb-3 text-lg font-bold text-white sm:mb-4 sm:text-xl">Player Point Predictions</h2>
       <div className="space-y-2">
         {players.map((playerId, index) => (
           <div
             key={playerId}
-            className="flex justify-between items-center p-2 sm:p-3 bg-slate-700 rounded text-sm sm:text-base"
+            className="flex items-center justify-between rounded-lg border border-slate-700/60 bg-slate-700/35 p-2.5 text-sm sm:p-3 sm:text-base"
           >
             <span className="text-gray-300 truncate">{playerNames[index] || `Player ${playerId}`}</span>
             {renderPrediction(playerId)}

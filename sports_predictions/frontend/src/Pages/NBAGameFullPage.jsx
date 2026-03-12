@@ -34,12 +34,16 @@ export default function NBAGameFullPage() {
     fetchGame();
   }, [params.gameId, state]);
 
-  if (loading) return <div>Loading game {params.gameId}...</div>;
-  if (error) return <div className="p-4 text-red-400">{error}</div>;
-  if (!game) return <div>No game data</div>;
+  if (loading) {
+    return <div className="panel p-6 text-slate-300">Loading game {params.gameId}...</div>;
+  }
+  if (error) {
+    return <div className="rounded-lg border border-red-500/40 p-4 text-red-300">{error}</div>;
+  }
+  if (!game) return <div className="panel p-6 text-slate-300">No game data</div>;
 
   return (
-    <div className="bg-slate-900 flex flex-col px-3 sm:px-4 md:px-6 py-4 min-h-screen">
+    <div className="pb-6 sm:pb-8">
       <ActualGame game={game} />
     </div>
   );
