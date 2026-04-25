@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import ActualGame from "../Components/GameFullPage/ActualGame.jsx";
 import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
-export default function NBAGameFullPage() {
+export default function MLBGameFullPage() {
   const { state } = useLocation();
   const params = useParams();
   const [game, setGame] = useState(state?.game || null);
@@ -12,16 +12,13 @@ export default function NBAGameFullPage() {
 
   useEffect(() => {
     if (state?.game) return;
-
     const fetchGame = async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchAPI(API_ENDPOINTS.nba.games.today);
+        const data = await fetchAPI(API_ENDPOINTS.mlb.games.today);
         const games = data.scoreboard?.games || [];
-        const found = games.find(
-          (g) => String(g.gameId) === String(params.gameId)
-        );
+        const found = games.find((g) => String(g.gameId) === String(params.gameId));
         if (found) setGame(found);
         else setError("Game not found");
       } catch (err) {
@@ -30,21 +27,16 @@ export default function NBAGameFullPage() {
         setLoading(false);
       }
     };
-
     fetchGame();
   }, [params.gameId, state]);
 
-  if (loading) {
-    return <div className="panel p-6 text-slate-300">Loading game {params.gameId}...</div>;
-  }
-  if (error) {
-    return <div className="rounded-lg border border-red-500/40 p-4 text-red-300">{error}</div>;
-  }
+  if (loading) return <div className="panel p-6 text-slate-300">Loading game {params.gameId}...</div>;
+  if (error) return <div className="rounded-lg border border-red-500/40 p-4 text-red-300">{error}</div>;
   if (!game) return <div className="panel p-6 text-slate-300">No game data</div>;
 
   return (
     <div className="pb-6 sm:pb-8">
-      <ActualGame game={game} />
+      <ActualGame game={game} sport="mlb" />
     </div>
   );
 }

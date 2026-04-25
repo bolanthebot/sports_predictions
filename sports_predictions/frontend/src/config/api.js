@@ -4,21 +4,43 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 const API_ENDPOINTS = {
   health: '/health',
   ready: '/ready',
-  games: {
-    today: '/api/nba/games/today',
+  nba: {
+    games: {
+      today: '/api/nba/games/today',
+    },
+    teams: {
+      games: '/api/nba/teams/',
+      players: '/api/nba/teamplayers/',
+      injuries: '/api/nba/injuries/',
+    },
+    players: {
+      games: '/api/nba/players/',
+    },
+    predictions: {
+      today: '/api/nba/predictions/today/',
+      status: '/api/nba/predictions/status',
+      playerToday: '/api/nba/predictions/player/today/',
+      playerBatch: '/api/nba/predictions/players/batch/',
+    },
   },
-  teams: {
-    games: '/api/nba/teams/',
-    players: '/api/nba/teamplayers/',
-    injuries: '/api/nba/injuries/',
-  },
-  players: {
-    games: '/api/nba/players/',
-  },
-  predictions: {
-    today: '/api/nba/predictions/today/',
-    playerToday: '/api/nba/predictions/player/today/',
-    playerBatch: '/api/nba/predictions/players/batch/',
+  mlb: {
+    games: {
+      today: '/api/mlb/games/today',
+    },
+    teams: {
+      games: '/api/mlb/teams/',
+      players: '/api/mlb/teamplayers/',
+      injuries: '/api/mlb/injuries/',
+    },
+    players: {
+      games: '/api/mlb/players/',
+    },
+    predictions: {
+      today: '/api/mlb/predictions/today/',
+      status: '/api/mlb/predictions/status',
+      playerToday: '/api/mlb/predictions/player/today/',
+      playerBatch: '/api/mlb/predictions/players/batch/',
+    },
   },
 };
 

@@ -85,7 +85,7 @@ function NBAGameSnippet(props) {
 
   return (
     <article className="panel px-4 py-3 transition-colors hover:border-orange-400/60">
-      <Link to={`/game/${game.gameId}`} state={{ game: game }} className="block">
+      <Link to={`/nba/game/${game.gameId}`} state={{ game: game }} className="block">
         <div className="mb-4 flex items-center justify-between text-sm">
           <span className="text-slate-400">{game.gameStatusText}</span>
           <span
@@ -108,7 +108,7 @@ function NBAGameSnippet(props) {
 
       <div className="flex flex-col gap-3">
         <Link
-          to={`/team/${game.awayTeam.teamId}`}
+          to={`/nba/team/${game.awayTeam.teamId}`}
           state={{ team: game.awayTeam }}
           className="rounded-lg border p-3 transition-[filter] duration-150 hover:brightness-110"
           style={awayStyles.container}
@@ -129,7 +129,7 @@ function NBAGameSnippet(props) {
         </Link>
 
         <Link
-          to={`/team/${game.homeTeam.teamId}`}
+          to={`/nba/team/${game.homeTeam.teamId}`}
           state={{ team: game.homeTeam }}
           className="rounded-lg border p-3 transition-[filter] duration-150 hover:brightness-110"
           style={homeStyles.container}

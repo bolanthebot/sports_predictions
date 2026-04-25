@@ -3,6 +3,8 @@ import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
 export default function PlayerPrediction(props) {
   const { playerId, playerName } = props;
+  const sport = props.sport || "nba";
+  const endpoints = API_ENDPOINTS[sport] || API_ENDPOINTS.nba;
   const [prediction, setPrediction] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,7 +20,7 @@ export default function PlayerPrediction(props) {
         return;
       }
 
-      const data = await fetchAPI(API_ENDPOINTS.predictions.playerToday, {
+      const data = await fetchAPI(endpoints.predictions.playerToday, {
         params: { playerid: playerId }
       });
       setPrediction(data);

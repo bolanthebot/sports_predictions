@@ -18,6 +18,22 @@ from services.cache import cache_get
 from predict import predict_game, predict_all_games, PREDICTION_CACHE_PATH
 from predict_player import predict_player_points
 
+# --- MLB ---
+from services.mlb import (
+    get_today_games as mlb_get_today_games,
+    get_team as mlb_get_team,
+    get_player as mlb_get_player,
+    get_team_players as mlb_get_team_players,
+    TEAM_ID_TO_ABBR as MLB_TEAM_ID_TO_ABBR,
+)
+from services.mlb_injury import fetch_mlb_injuries
+from predict_mlb import (
+    predict_game as mlb_predict_game,
+    predict_all_games as mlb_predict_all_games,
+    PREDICTION_CACHE_PATH as MLB_PREDICTION_CACHE_PATH,
+)
+from predict_mlb_player import predict_player_stat as mlb_predict_player_stat
+
 # Load environment variables (for local development)
 try:
     from dotenv import load_dotenv
@@ -57,27 +73,44 @@ _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 _warmup_complete = threading.Event()
 _warmup_error = None
 
+_mlb_warmup_complete = threading.Event()
+_mlb_warmup_error = None
+
 
 def _run_warmup():
-    """Pre-compute all game predictions so user requests never trigger heavy computation."""
+    """Pre-compute all NBA game predictions so user requests never trigger heavy computation."""
     global _warmup_error
     try:
-        logger.info("Warmup: pre-computing game predictions...")
+        logger.info("Warmup (NBA): pre-computing game predictions...")
         predict_all_games()
-        logger.info("Warmup: game predictions cached successfully")
+        logger.info("Warmup (NBA): game predictions cached successfully")
     except Exception as e:
         _warmup_error = str(e)
-        logger.error(f"Warmup failed: {e}", exc_info=True)
+        logger.error(f"NBA warmup failed: {e}", exc_info=True)
     finally:
         _warmup_complete.set()
+
+
+def _run_mlb_warmup():
+    """Pre-compute all MLB game predictions."""
+    global _mlb_warmup_error
+    try:
+        logger.info("Warmup (MLB): pre-computing game predictions...")
+        mlb_predict_all_games()
+        logger.info("Warmup (MLB): game predictions cached successfully")
+    except Exception as e:
+        _mlb_warmup_error = str(e)
+        logger.error(f"MLB warmup failed: {e}", exc_info=True)
+    finally:
+        _mlb_warmup_complete.set()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
     logger.info(f"Starting Sports Predictions API ({ENVIRONMENT})")
-    warmup_thread = threading.Thread(target=_run_warmup, daemon=True)
-    warmup_thread.start()
+    threading.Thread(target=_run_warmup, daemon=True).start()
+    threading.Thread(target=_run_mlb_warmup, daemon=True).start()
     yield
     logger.info("Shutting down Sports Predictions API")
     _executor.shutdown(wait=True)
@@ -85,8 +118,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Sports Predictions API",
-    description="NBA game and player predictions API",
-    version="1.0.0",
+    description="NBA and MLB game and player predictions API",
+    version="1.1.0",
     lifespan=lifespan,
     docs_url="/docs" if ENVIRONMENT != "production" else None,  # Disable docs in production
     redoc_url="/redoc" if ENVIRONMENT != "production" else None,
@@ -264,4 +297,106 @@ async def team_injuries(teamid: str):
         return {"injuries": injuries_list}
     except Exception as e:
         logger.error(f"Error fetching injuries for team {teamid}: {e}")
+        return {"injuries": [], "error": str(e)}
+
+
+# ---------------- MLB endpoints ----------------
+# gets today's MLB games returns json
+@app.get("/api/mlb/games/today")
+def mlb_today_games():
+    return mlb_get_today_games()
+
+
+@app.get("/api/mlb/teams/")
+def mlb_team_games(id):
+    return mlb_get_team(id).to_json(orient="records")
+
+
+@app.get("/api/mlb/teamplayers/")
+def mlb_active_players(teamid):
+    players = mlb_get_team_players(teamid)
+    pid = [players["PLAYER_ID"].tolist(), players["PLAYER_NAME"].tolist()]
+    return pid
+
+
+@app.get("/api/mlb/players/")
+def mlb_player_games(id):
+    return mlb_get_player(id).to_json(orient="records")
+
+
+@app.get("/api/mlb/predictions/today/")
+def mlb_predictions(gameid: str, teamid: str):
+    cache_key = f"mlb_predict_game:{date.today().isoformat()}:{gameid}:{teamid}"
+    cached = cache_get(MLB_PREDICTION_CACHE_PATH, cache_key)
+    if cached is not None:
+        return cached
+
+    if not _mlb_warmup_complete.is_set():
+        return {"status": "warming_up", "message": "MLB predictions are being generated. Please retry in a few seconds."}
+
+    return mlb_predict_game(gameid, teamid)
+
+
+@app.get("/api/mlb/predictions/status")
+def mlb_prediction_status():
+    return {
+        "ready": _mlb_warmup_complete.is_set(),
+        "error": _mlb_warmup_error,
+    }
+
+
+@app.get("/api/mlb/predictions/player/today/")
+def mlb_player_prediction(playerid: str, stat: str = "hits"):
+    result = mlb_predict_player_stat(playerid, stat=stat)
+    if isinstance(result, dict) and "error" in result:
+        return result
+    if isinstance(result, dict) and "predicted_value" in result:
+        return float(result["predicted_value"])
+    return {"error": "Unexpected response from MLB player prediction service", "player_id": playerid}
+
+
+@app.get("/api/mlb/predictions/players/batch/")
+async def mlb_batch_player_predictions(
+    player_ids: str = Query(..., description="Comma-separated player IDs"),
+    stat: str = Query("hits", description="hits or strikeouts"),
+):
+    ids = [pid.strip() for pid in player_ids.split(",") if pid.strip()]
+    if not ids:
+        return {"error": "No player IDs provided", "predictions": {}}
+    if len(ids) > 25:
+        ids = ids[:25]
+
+    loop = asyncio.get_event_loop()
+
+    async def get_prediction(pid: str):
+        try:
+            result = await loop.run_in_executor(_executor, mlb_predict_player_stat, pid, stat)
+            if isinstance(result, dict) and "predicted_value" in result:
+                return (pid, float(result["predicted_value"]))
+            if isinstance(result, dict) and "error" in result:
+                return (pid, {"error": result["error"]})
+            return (pid, None)
+        except Exception as e:
+            return (pid, {"error": str(e)})
+
+    tasks = [get_prediction(pid) for pid in ids]
+    results = await asyncio.gather(*tasks)
+    return {"predictions": {pid: value for pid, value in results}}
+
+
+@app.get("/api/mlb/injuries/")
+async def mlb_team_injuries(teamid: str):
+    try:
+        team_id_int = int(teamid)
+        if team_id_int not in MLB_TEAM_ID_TO_ABBR:
+            return {"injuries": [], "error": f"Unknown team ID: {teamid}"}
+
+        loop = asyncio.get_event_loop()
+        injuries_df = await loop.run_in_executor(_executor, fetch_mlb_injuries, team_id_int)
+        if injuries_df.empty:
+            return {"injuries": []}
+        injuries_list = injuries_df[["PLAYER_NAME", "STATUS", "REASON"]].to_dict(orient="records")
+        return {"injuries": injuries_list}
+    except Exception as e:
+        logger.error(f"Error fetching MLB injuries for team {teamid}: {e}")
         return {"injuries": [], "error": str(e)}

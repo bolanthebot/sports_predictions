@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { fetchAPI, API_ENDPOINTS } from "../config/api.js";
 
-export default function TeamPlayerPredictions({ teamId }) {
+export default function TeamPlayerPredictions({ teamId, sport = "nba" }) {
+  const endpoints = API_ENDPOINTS[sport] || API_ENDPOINTS.nba;
   const [players, setPlayers] = useState([]);
   const [playerNames, setPlayerNames] = useState([]);
   const [predictions, setPredictions] = useState({});
@@ -30,7 +31,7 @@ export default function TeamPlayerPredictions({ teamId }) {
         abortControllerRef.current.abort();
       }
 
-      const data = await fetchAPI(API_ENDPOINTS.teams.players, {
+      const data = await fetchAPI(endpoints.teams.players, {
         params: { teamid: teamId }
       });
       
@@ -62,7 +63,7 @@ export default function TeamPlayerPredictions({ teamId }) {
       abortControllerRef.current = new AbortController();
       
       const idsParam = playerIds.join(",");
-      const data = await fetchAPI(API_ENDPOINTS.predictions.playerBatch, {
+      const data = await fetchAPI(endpoints.predictions.playerBatch, {
         params: { player_ids: idsParam },
         signal: abortControllerRef.current.signal
       });

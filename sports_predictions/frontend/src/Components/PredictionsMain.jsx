@@ -3,6 +3,8 @@ import { fetchPrediction as fetchPredictionAPI, API_ENDPOINTS } from "../config/
 
 export default function PredictionsMain(props) {
   const ids = props.ids || { gameId: props.game, teamId: props.team };
+  const sport = props.sport || "nba";
+  const endpoints = API_ENDPOINTS[sport] || API_ENDPOINTS.nba;
   const gameid = ids?.gameId;
   const teamid = ids?.teamId;
 
@@ -23,7 +25,7 @@ export default function PredictionsMain(props) {
       }
 
       const { data, warmingUp: isWarmingUp } = await fetchPredictionAPI(
-        API_ENDPOINTS.predictions.today,
+        endpoints.predictions.today,
         { params: { gameid, teamid } }
       );
 
@@ -43,7 +45,7 @@ export default function PredictionsMain(props) {
   }, [fetchPrediction]);
 
   const wp = prediction?.win_probability || 0;
-  const pp = prediction?.predicted_team_points || 0;
+  const pp = prediction?.predicted_team_points || prediction?.predicted_team_runs || 0;
 
   let percent = wp * 100;
   percent = percent.toFixed(2) + "%";
@@ -55,7 +57,9 @@ export default function PredictionsMain(props) {
   return (
     <div className="mt-1 text-sm">
       <p className="text-slate-400">Win Chance: {percent}</p>
-      <p className="text-slate-400">Predicted Points: {predicted_points}</p>
+      <p className="text-slate-400">
+        {sport === "mlb" ? "Predicted Runs" : "Predicted Points"}: {predicted_points}
+      </p>
     </div>
   );
 }

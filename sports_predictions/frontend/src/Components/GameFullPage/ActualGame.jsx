@@ -3,6 +3,7 @@ import PredictionSlider from "../PredictionSlider";
 
 export default function ActualGame(props) {
   const { game } = props;
+  const sport = props.sport || "nba";
 
   return (
     <div className="panel w-full p-4 sm:p-5 md:p-6">
@@ -16,7 +17,7 @@ export default function ActualGame(props) {
             {game.awayTeam.teamCity} {game.awayTeam.teamName}
           </p>
           <p className="text-3xl font-bold text-white">{game.awayTeam.score}</p>
-          <PredictionsMain game={game.gameId} team={game.awayTeam.teamId} />
+          <PredictionsMain game={game.gameId} team={game.awayTeam.teamId} sport={sport} />
         </div>
 
         <span className="pt-2 text-center text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
@@ -28,7 +29,7 @@ export default function ActualGame(props) {
             {game.homeTeam.teamCity} {game.homeTeam.teamName}
           </p>
           <p className="text-3xl font-bold text-white">{game.homeTeam.score}</p>
-          <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} />
+          <PredictionsMain game={game.gameId} team={game.homeTeam.teamId} sport={sport} />
         </div>
       </div>
       {/* <div className="flex flex-col items-center mt-4">

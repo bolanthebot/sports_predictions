@@ -9,7 +9,8 @@ const STATUS_COLORS = {
   Doubtful: "bg-red-500/20 text-red-300 border-red-500/30",
 };
 
-export default function TeamInjuries({ teamId }) {
+export default function TeamInjuries({ teamId, sport = "nba" }) {
+  const endpoints = API_ENDPOINTS[sport] || API_ENDPOINTS.nba;
   const [injuries, setInjuries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +22,7 @@ export default function TeamInjuries({ teamId }) {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchAPI(API_ENDPOINTS.teams.injuries, {
+        const data = await fetchAPI(endpoints.teams.injuries, {
           params: { teamid: teamId },
         });
         setInjuries(data.injuries || []);

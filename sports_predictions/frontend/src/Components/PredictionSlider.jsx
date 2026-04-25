@@ -1,4 +1,5 @@
 export default function PredictionSlider(props) {
+  const sport = props.sport || "nba";
   const away = props.away;
   const home = props.home;
   const linelength = props.linelength;
@@ -17,7 +18,7 @@ export default function PredictionSlider(props) {
   };
 
   return (
-    <div className="flex items-center">
+    <div data-sport={sport} className="flex items-center">
       <div
         className="relative h-5 m-2"
         style={{
