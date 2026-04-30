@@ -12,13 +12,24 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 
 import pandas as pd
 import xgboost as xgb
 
 from services.cache import cache_get, cache_set, get_cache_path
 from services.mlb import get_player
+
+
+# Early-season fallback thresholds: if the current-season log has fewer than
+# this many rows, we stitch in the prior season(s) so the rolling features
+# we feed to the model are stable. Pitchers have a lower bar because starts
+# come every ~5 days.
+_HITTER_MIN_CURRENT_GAMES = 10
+_PITCHER_MIN_CURRENT_GAMES = 5
+# Cap how much history we keep — we only need enough rows to fill the longest
+# rolling window plus a few rows of slack.
+_PLAYER_HISTORY_MAX_ROWS = 50
 
 
 BASE_DIR = os.path.dirname(__file__)
@@ -42,10 +53,14 @@ def _load_batter_assets() -> str | None:
     global _batter_model, _BATTER_FEATURES
     if _batter_model is not None and _BATTER_FEATURES is not None:
         return None
+    not_trained_msg = (
+        "MLB batter model not trained yet. Run `python train_mlb_player.py` "
+        "to generate models/mlb_batter_hits_model.json (~10-15 min first run)."
+    )
     if not os.path.exists(BATTER_MODEL_PATH) or os.path.getsize(BATTER_MODEL_PATH) == 0:
-        return f"Missing or empty model file: {BATTER_MODEL_PATH}"
+        return not_trained_msg
     if not os.path.exists(BATTER_FEATURES_PATH) or os.path.getsize(BATTER_FEATURES_PATH) == 0:
-        return f"Missing or empty feature file: {BATTER_FEATURES_PATH}"
+        return not_trained_msg
     try:
         m = xgb.XGBRegressor()
         m.load_model(BATTER_MODEL_PATH)
@@ -62,10 +77,14 @@ def _load_pitcher_assets() -> str | None:
     global _pitcher_model, _PITCHER_FEATURES
     if _pitcher_model is not None and _PITCHER_FEATURES is not None:
         return None
+    not_trained_msg = (
+        "MLB pitcher model not trained yet. Run `python train_mlb_player.py` "
+        "to generate models/mlb_pitcher_k_model.json (~10-15 min first run)."
+    )
     if not os.path.exists(PITCHER_MODEL_PATH) or os.path.getsize(PITCHER_MODEL_PATH) == 0:
-        return f"Missing or empty model file: {PITCHER_MODEL_PATH}"
+        return not_trained_msg
     if not os.path.exists(PITCHER_FEATURES_PATH) or os.path.getsize(PITCHER_FEATURES_PATH) == 0:
-        return f"Missing or empty feature file: {PITCHER_FEATURES_PATH}"
+        return not_trained_msg
     try:
         m = xgb.XGBRegressor()
         m.load_model(PITCHER_MODEL_PATH)
@@ -166,6 +185,47 @@ def _strikeouts_column(df: pd.DataFrame) -> str | None:
     return None
 
 
+def _get_player_history(player_id: str | int,
+                          group: str,
+                          min_current_games: int) -> pd.DataFrame:
+    """Return the player's recent gamelog, falling back across seasons.
+
+    We always look at the current season first. Early in the year the
+    in-progress season has too few games to form stable rolling priors
+    (the model's rolling-5 / rolling-10 features become noisy or NaN),
+    so we stitch in the prior season(s) and keep the most recent rows.
+    """
+    current = datetime.now().year
+    current_log = get_player(player_id, season=current, group=group)
+
+    has_enough_current = (
+        not current_log.empty and len(current_log) >= min_current_games
+    )
+    if has_enough_current:
+        return current_log
+
+    # Pull prior seasons (newest first), stop once we have enough rows.
+    logs: list[pd.DataFrame] = []
+    if not current_log.empty:
+        logs.append(current_log)
+    for season in (current - 1, current - 2):
+        try:
+            prior = get_player(player_id, season=season, group=group)
+        except Exception:
+            prior = pd.DataFrame()
+        if not prior.empty:
+            logs.append(prior)
+        if sum(len(df) for df in logs) >= min_current_games * 3:
+            break
+
+    if not logs:
+        return current_log  # empty
+    combined = pd.concat(logs, ignore_index=True)
+    combined["GAME_DATE"] = pd.to_datetime(combined["GAME_DATE"])
+    combined = combined.sort_values("GAME_DATE").reset_index(drop=True)
+    return combined.tail(_PLAYER_HISTORY_MAX_ROWS).reset_index(drop=True)
+
+
 def predict_batter_hits(player_id: str):
     cache_key = f"mlb_predict_batter:{date.today().isoformat()}:{player_id}"
     cached = cache_get(PREDICTION_CACHE_PATH, cache_key)
@@ -179,7 +239,9 @@ def predict_batter_hits(player_id: str):
         return result
 
     try:
-        history = get_player(player_id, group="hitting")
+        history = _get_player_history(
+            player_id, group="hitting", min_current_games=_HITTER_MIN_CURRENT_GAMES
+        )
         if history.empty:
             result = {"error": "No batter game data available", "player_id": player_id}
             cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
@@ -205,7 +267,17 @@ def predict_batter_hits(player_id: str):
 
         hits_col = _hits_column(history)
         recent_avg = float(history[hits_col].tail(5).mean()) if hits_col else 0.0
-        season_avg = float(history[hits_col].mean()) if hits_col else 0.0
+        # Limit "season average" to the current calendar year if we have any
+        # current-season rows; otherwise fall back to the full pulled window.
+        if hits_col:
+            current_year = datetime.now().year
+            cy_mask = history["GAME_DATE"].dt.year == current_year
+            if cy_mask.any():
+                season_avg = float(history.loc[cy_mask, hits_col].mean())
+            else:
+                season_avg = float(history[hits_col].mean())
+        else:
+            season_avg = 0.0
 
         latest_game = history.iloc[-1]
         result = {
@@ -241,7 +313,9 @@ def predict_pitcher_strikeouts(player_id: str):
         return result
 
     try:
-        history = get_player(player_id, group="pitching")
+        history = _get_player_history(
+            player_id, group="pitching", min_current_games=_PITCHER_MIN_CURRENT_GAMES
+        )
         if history.empty:
             result = {"error": "No pitcher game data available", "player_id": player_id}
             cache_set(PREDICTION_CACHE_PATH, cache_key, result, ttl_seconds=PREDICTION_ERROR_TTL_SECONDS)
@@ -267,7 +341,15 @@ def predict_pitcher_strikeouts(player_id: str):
 
         k_col = _strikeouts_column(history)
         recent_avg = float(history[k_col].tail(5).mean()) if k_col else 0.0
-        season_avg = float(history[k_col].mean()) if k_col else 0.0
+        if k_col:
+            current_year = datetime.now().year
+            cy_mask = history["GAME_DATE"].dt.year == current_year
+            if cy_mask.any():
+                season_avg = float(history.loc[cy_mask, k_col].mean())
+            else:
+                season_avg = float(history[k_col].mean())
+        else:
+            season_avg = 0.0
 
         latest_game = history.iloc[-1]
         result = {

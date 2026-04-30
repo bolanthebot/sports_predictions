@@ -265,6 +265,11 @@ def _flatten_team_schedule(raw: dict, team_id: int) -> pd.DataFrame:
             home_err = int(_safe_get(line, "teams", "home", "errors", default=0) or 0)
             away_err = int(_safe_get(line, "teams", "away", "errors", default=0) or 0)
 
+            # Starting pitcher IDs (requires `probablePitcher` in hydrate). For
+            # completed games the API returns the actual starter here.
+            home_sp_id = int(_safe_get(home, "probablePitcher", "id", default=0) or 0)
+            away_sp_id = int(_safe_get(away, "probablePitcher", "id", default=0) or 0)
+
             is_home = team_id == home_team_id
             opp_id = away_team_id if is_home else home_team_id
             r = home_runs if is_home else away_runs
@@ -273,6 +278,8 @@ def _flatten_team_schedule(raw: dict, team_id: int) -> pd.DataFrame:
             ha = away_hits if is_home else home_hits
             e = home_err if is_home else away_err
             ea = away_err if is_home else home_err
+            sp_id = home_sp_id if is_home else away_sp_id
+            opp_sp_id = away_sp_id if is_home else home_sp_id
 
             wl = "W" if r > ra else ("L" if r < ra else "T")
             tri = TEAM_ID_TO_ABBR.get(team_id, "")
@@ -295,6 +302,8 @@ def _flatten_team_schedule(raw: dict, team_id: int) -> pd.DataFrame:
                 "HA": ha,
                 "E": e,
                 "EA": ea,
+                "SP_ID": sp_id,
+                "OPP_SP_ID": opp_sp_id,
                 "PTS": r,  # alias for cross-sport code paths
             })
     df = pd.DataFrame(rows)
@@ -307,7 +316,8 @@ def _flatten_team_schedule(raw: dict, team_id: int) -> pd.DataFrame:
 def get_team(team_id, season: int | None = None) -> pd.DataFrame:
     """Return a team's game log for the given season (default: current)."""
     season = int(season or _CURRENT_SEASON)
-    cache_key = f"team_gamelog:{season}:{team_id}"
+    # cache key is v2 since we now also pull SP_ID via probablePitcher hydrate
+    cache_key = f"team_gamelog_v2:{season}:{team_id}"
     cached = cache_get(_MLB_CACHE_PATH, cache_key)
     if cached is not None:
         return cached
@@ -319,7 +329,7 @@ def get_team(team_id, season: int | None = None) -> pd.DataFrame:
             "teamId": int(team_id),
             "startDate": f"{season}-03-01",
             "endDate": f"{season}-11-30",
-            "hydrate": "linescore,team",
+            "hydrate": "linescore,team,probablePitcher",
         },
     )
     df = _flatten_team_schedule(raw, int(team_id))
@@ -552,19 +562,41 @@ def get_starting_pitchers(min_ip: int = 30, season: int | None = None) -> pd.Dat
 
 
 def get_all_player_gamelogs(seasons: list[int] | None = None,
-                             min_pa: int = 80,
+                             min_pa: int = 200,
+                             min_ip: int = 30,
                              group: str = "hitting",
                              delay: float = 0.4) -> pd.DataFrame:
-    """Fetch per-game logs for all qualifying batters/pitchers (used for training)."""
-    seasons = seasons or [_CURRENT_SEASON]
+    """Fetch per-game logs for all qualifying batters/pitchers (used for training).
+
+    Defaults pull the last 4 seasons (matching ``get_all_games``). Passing only
+    the current season early in the year produces a tiny roster — most players
+    won't have crossed the PA/IP thresholds yet — so we always include prior
+    completed seasons by default.
+
+    For the current (in-progress) season we relax the qualification thresholds
+    so partially-played hitters/pitchers still show up.
+    """
+    if not seasons:
+        seasons = [_CURRENT_SEASON - 3, _CURRENT_SEASON - 2,
+                   _CURRENT_SEASON - 1, _CURRENT_SEASON]
+
     all_logs: list[pd.DataFrame] = []
-
     for season in seasons:
-        if group == "pitching":
-            roster = get_starting_pitchers(min_ip=20, season=season)
-        else:
-            roster = get_rotation_players(min_pa=min_pa, season=season)
+        # Relax thresholds for the in-progress current season so we still get
+        # the regulars. Completed seasons keep the higher quality bar.
+        is_current = season >= _CURRENT_SEASON
+        season_min_pa = max(50, min_pa // 4) if is_current else min_pa
+        season_min_ip = max(10, min_ip // 3) if is_current else min_ip
 
+        if group == "pitching":
+            roster = get_starting_pitchers(min_ip=season_min_ip, season=season)
+        else:
+            roster = get_rotation_players(min_pa=season_min_pa, season=season)
+
+        print(f"[MLB players] {season} {group}: roster size = {len(roster)} "
+              f"(threshold {'PA>=' + str(season_min_pa) if group != 'pitching' else 'IP>=' + str(season_min_ip)})")
+
+        season_logs: list[pd.DataFrame] = []
         for _, row in roster.iterrows():
             pid = int(row["PLAYER_ID"])
             try:
@@ -572,8 +604,15 @@ def get_all_player_gamelogs(seasons: list[int] | None = None,
             except Exception:
                 df = pd.DataFrame()
             if not df.empty:
-                all_logs.append(df)
+                season_logs.append(df)
             time.sleep(delay)
+        if season_logs:
+            season_df = pd.concat(season_logs, ignore_index=True)
+            season_df["SEASON"] = str(season)
+            all_logs.append(season_df)
+        print(f"[MLB players] {season} {group}: collected "
+              f"{sum(len(s) for s in season_logs)} game-rows from "
+              f"{len(season_logs)} players")
 
     if not all_logs:
         return pd.DataFrame()
@@ -599,7 +638,7 @@ def get_all_games(seasons: list[int] | None = None) -> pd.DataFrame:
                     "sportId": 1,
                     "startDate": f"{season}-03-01",
                     "endDate": f"{season}-11-30",
-                    "hydrate": "linescore,team",
+                    "hydrate": "linescore,team,probablePitcher",
                     "gameType": "R",
                 },
             )

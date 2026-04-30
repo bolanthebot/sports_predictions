@@ -3,13 +3,25 @@
 Mirrors ``feature_engineering.py`` (NBA) but uses MLB stats: runs (R),
 runs allowed (RA), hits (H/HA), errors (E/EA). Same overall structure:
 rolling windows, Elo, win streak, rest days, opponent swap, differentials,
-momentum, and (optional) injury features.
+momentum, optional injury features, and starting-pitcher rolling priors.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
+# Default neutral SP priors, used when a pitcher is unknown / has no history.
+# Roughly league-average SP performance.
+_SP_FEATURE_DEFAULTS: dict[str, float] = {
+    "sp_era_l5": 4.30,
+    "sp_whip_l5": 1.30,
+    "sp_k9_l5": 8.50,
+    "sp_bb9_l5": 3.20,
+    "sp_ip_avg_l5": 5.20,
+    "sp_days_rest": 5.0,
+    "sp_starts_l30d": 5.0,
+}
 
 
 # --------------------------------------------------------------------- #
@@ -64,10 +76,17 @@ def compute_elo_ratings(df: pd.DataFrame,
         pre_game_elos[g["idx0"]] = elo_ratings[t0]
         pre_game_elos[g["idx1"]] = elo_ratings[t1]
 
+        # Skip the rating update for games without a result (e.g. today's
+        # synthetic future rows used at prediction time). pre_game_elos for
+        # those rows have already been recorded above.
+        wl0 = g["wl0"]
+        if pd.isna(wl0) or wl0 not in ("W", "L", "T"):
+            continue
+
         adj0 = elo_ratings[t0] + (home_advantage if g["home0"] else 0)
         adj1 = elo_ratings[t1] + (0 if g["home0"] else home_advantage)
         exp0 = 1.0 / (1.0 + 10.0 ** ((adj1 - adj0) / 400.0))
-        score0 = 1.0 if g["wl0"] == "W" else 0.0
+        score0 = 0.5 if wl0 == "T" else (1.0 if wl0 == "W" else 0.0)
 
         elo_ratings[t0] += k_factor * (score0 - exp0)
         elo_ratings[t1] += k_factor * ((1.0 - score0) - (1.0 - exp0))
@@ -78,13 +97,19 @@ def compute_elo_ratings(df: pd.DataFrame,
 # --------------------------------------------------------------------- #
 # Main feature-creation function                                         #
 # --------------------------------------------------------------------- #
-def create_features(df: pd.DataFrame, injuries_df: pd.DataFrame | None = None) -> pd.DataFrame:
+def create_features(df: pd.DataFrame,
+                    injuries_df: pd.DataFrame | None = None,
+                    sp_features_df: pd.DataFrame | None = None) -> pd.DataFrame:
     """Create all features for MLB game prediction.
 
     Args:
         df: DataFrame with one row per (team, game) — see services/mlb.py.
             Required columns: GAME_ID, GAME_DATE, TEAM_ID, WL, MATCHUP, R, RA, H, HA, E, EA.
+            Optional columns: SP_ID, OPP_SP_ID (used to attach SP priors).
         injuries_df: Optional injury impact features keyed on GAME_ID + TEAM_ID.
+        sp_features_df: Optional starting-pitcher rolling priors keyed on
+            (SP_ID, GAME_ID). Produced by
+            ``services.mlb_pitcher_features.compute_sp_rolling_features``.
 
     Returns:
         DataFrame with all engineered features (one row per input row).
@@ -92,6 +117,10 @@ def create_features(df: pd.DataFrame, injuries_df: pd.DataFrame | None = None) -
     features = pd.DataFrame(index=df.index)
     features["GAME_ID"] = df["GAME_ID"].astype(str).values
     features["TEAM_ID"] = df["TEAM_ID"].astype(int).values
+    if "SP_ID" in df.columns:
+        features["SP_ID"] = pd.to_numeric(df["SP_ID"], errors="coerce").fillna(0).astype(int).values
+    else:
+        features["SP_ID"] = 0
 
     # Stats we'll roll. R = runs, H = hits, RA = runs allowed (defense), HA = hits
     # allowed, E = errors, EA = opponent errors.
@@ -216,6 +245,32 @@ def create_features(df: pd.DataFrame, injuries_df: pd.DataFrame | None = None) -
             / (features[f"{stat.lower()}_avg_5"].abs() + 1e-6)
         ).clip(0, 10)
 
+    # ===== Starting-pitcher rolling priors =====
+    # Merged on (SP_ID, GAME_ID); fills missing pitchers with league-average
+    # priors so the row-swap below produces sensible opponent SP features.
+    sp_cols = list(_SP_FEATURE_DEFAULTS.keys())
+    if sp_features_df is not None and not sp_features_df.empty and "SP_ID" in df.columns:
+        sp = sp_features_df.copy()
+        sp["SP_ID"] = pd.to_numeric(sp["SP_ID"], errors="coerce").fillna(0).astype(int)
+        sp["GAME_ID"] = sp["GAME_ID"].astype(str)
+        merge_keys = pd.DataFrame({
+            "SP_ID": features["SP_ID"].astype(int).values,
+            "GAME_ID": features["GAME_ID"].astype(str).values,
+        }, index=features.index)
+        merged = merge_keys.merge(sp, on=["SP_ID", "GAME_ID"], how="left")
+        for col in sp_cols:
+            if col in merged.columns:
+                features[col] = merged[col].fillna(_SP_FEATURE_DEFAULTS[col]).values
+            else:
+                features[col] = _SP_FEATURE_DEFAULTS[col]
+    else:
+        for col, default in _SP_FEATURE_DEFAULTS.items():
+            features[col] = default
+
+    # Defragment after the bulk column inserts above to suppress pandas
+    # PerformanceWarning chatter from later assignments.
+    features = features.copy()
+
     # ===== Opponent features (row swap within games) =====
     opponent_features = pd.DataFrame(
         np.nan, index=features.index, columns=features.columns, dtype=float
@@ -252,6 +307,24 @@ def create_features(df: pd.DataFrame, injuries_df: pd.DataFrame | None = None) -
     features["opp_elo"] = opponent_features["elo"]
     features["elo_diff"] = features["elo"] - features["opp_elo"]
 
+    # ===== Opponent SP features + SP matchup diffs =====
+    # The row swap above already mirrored opponent SP rolling priors into
+    # `opponent_features`; copy them in under "opp_*" names and build diffs.
+    # Diffs are signed so positive means our pitcher is *better*.
+    for col in sp_cols:
+        opp_col = f"opp_{col}"
+        features[opp_col] = opponent_features[col]
+        if col == "sp_era_l5":
+            features["sp_era_diff"] = features[opp_col] - features[col]
+        elif col == "sp_whip_l5":
+            features["sp_whip_diff"] = features[opp_col] - features[col]
+        elif col == "sp_k9_l5":
+            features["sp_k9_diff"] = features[col] - features[opp_col]
+        elif col == "sp_bb9_l5":
+            features["sp_bb9_diff"] = features[opp_col] - features[col]
+        elif col == "sp_ip_avg_l5":
+            features["sp_ip_diff"] = features[col] - features[opp_col]
+
     # ===== Opponent strength =====
     features["opp_win_pct_5"] = opponent_features["win_pct_5"]
     features["opp_r_avg_5"] = opponent_features["r_avg_5"]
@@ -281,5 +354,5 @@ def create_features(df: pd.DataFrame, injuries_df: pd.DataFrame | None = None) -
     )
 
     # ===== Drop join columns =====
-    features = features.drop(columns=["GAME_ID", "TEAM_ID"])
+    features = features.drop(columns=["GAME_ID", "TEAM_ID", "SP_ID"], errors="ignore")
     return features

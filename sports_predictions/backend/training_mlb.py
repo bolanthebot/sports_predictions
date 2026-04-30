@@ -25,6 +25,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from feature_engineering_mlb import create_features
 from services.mlb import get_all_games
+from services.mlb_pitcher_features import compute_sp_rolling_features
 
 
 os.makedirs("models", exist_ok=True)
@@ -45,7 +46,23 @@ if "SEASON" in df.columns:
 
 # Skip injuries during training (today's IL applied to historical games is noise)
 print(f"\n{'='*60}\nFEATURE ENGINEERING\n{'='*60}")
-X = create_features(df)
+
+# Starting-pitcher rolling priors. Cached per-pitcher, so the slow first run
+# pays for itself on subsequent training runs.
+sp_features_df = pd.DataFrame()
+if "SP_ID" in df.columns and (df["SP_ID"] > 0).any():
+    print("[OK] SP_ID column present — computing SP rolling priors...")
+    try:
+        sp_features_df = compute_sp_rolling_features(df, window=5)
+        print(f"[OK] SP feature rows: {len(sp_features_df)}")
+    except Exception as exc:
+        print(f"[WARN] SP feature build failed ({exc}); continuing without SP features.")
+        sp_features_df = pd.DataFrame()
+else:
+    print("[WARN] No SP_ID column found in game data — delete data/mlb_game_cache.pkl "
+          "and rerun to fetch starter info, then retrain.")
+
+X = create_features(df, sp_features_df=sp_features_df)
 y_win = df["WL"].map({"W": 1, "L": 0, "T": 0})
 y_runs = df["R"]
 
