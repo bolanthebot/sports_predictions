@@ -11,18 +11,10 @@ export default function NBADailyGameGrid() {
   const [error, setError] = useState(null);
   const [refreshDisabled, setRefreshDisabled] = useState(false);
   
-  // Track in-flight requests to prevent duplicates
-  const fetchingRef = useRef(false);
   const abortControllerRef = useRef(null);
 
   const fetchGames = useCallback(async () => {
-    // Prevent duplicate concurrent requests
-    if (fetchingRef.current) {
-      return;
-    }
-    
     try {
-      fetchingRef.current = true;
       setLoading(true);
       setError(null);
       
@@ -45,7 +37,6 @@ export default function NBADailyGameGrid() {
       }
     } finally {
       setLoading(false);
-      fetchingRef.current = false;
     }
   }, []);
 

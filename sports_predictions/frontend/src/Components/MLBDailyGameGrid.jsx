@@ -9,13 +9,10 @@ export default function MLBDailyGameGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshDisabled, setRefreshDisabled] = useState(false);
-  const fetchingRef = useRef(false);
   const abortControllerRef = useRef(null);
 
   const fetchGames = useCallback(async () => {
-    if (fetchingRef.current) return;
     try {
-      fetchingRef.current = true;
       setLoading(true);
       setError(null);
       if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -29,7 +26,6 @@ export default function MLBDailyGameGrid() {
       if (err.name !== "AbortError") setError(err.message);
     } finally {
       setLoading(false);
-      fetchingRef.current = false;
     }
   }, []);
 
